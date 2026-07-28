@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+*.tgz
+
+# Never commit memory stores or downloaded model artifacts.
+memory/
+memories.json
+.cache/
+.opencode/memory.json
