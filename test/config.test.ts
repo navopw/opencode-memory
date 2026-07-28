@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { DEFAULTS, resolveConfig } from "../src/config.ts"
+import { DEFAULTS, embeddingSignature, resolveConfig } from "../src/config.ts"
 
 describe("config", () => {
 	test("falls back to defaults with no options and no env", () => {
@@ -36,15 +36,50 @@ describe("config", () => {
 		expect(warnings.join()).toContain("must be a finite number")
 	})
 
-	test("drops the bge instruction prefix for models that were not trained with it", () => {
-		expect(resolveConfig({ embeddingModel: "Xenova/all-MiniLM-L6-v2" }, {}).config.queryPrefix).toBe("")
-		expect(resolveConfig({ embeddingModel: "Xenova/bge-base-en-v1.5" }, {}).config.queryPrefix).toBe(
-			DEFAULTS.queryPrefix,
-		)
+	test("applies the pooling, prefixes and threshold the chosen model needs", () => {
+		// Each of these is measured per model; carrying one model's values over to
+		// another silently degrades retrieval rather than failing.
+		const bge = resolveConfig({ embeddingModel: "Xenova/bge-small-en-v1.5" }, {}).config
+		expect(bge.pooling).toBe("cls")
+		expect(bge.queryPrefix).toContain("Represent this sentence")
+		expect(bge.documentPrefix).toBe("")
+		expect(bge.injectThreshold).toBe(0.69)
+
+		const e5 = resolveConfig({ embeddingModel: "Xenova/multilingual-e5-small" }, {}).config
+		expect(e5.pooling).toBe("mean")
+		expect(e5.queryPrefix).toBe("query: ")
+		expect(e5.documentPrefix).toBe("passage: ")
+		expect(e5.injectThreshold).toBe(0.88)
 	})
 
-	test("keeps an explicitly configured prefix for any model", () => {
-		const { config } = resolveConfig({ embeddingModel: "Xenova/all-MiniLM-L6-v2", queryPrefix: "query: " }, {})
-		expect(config.queryPrefix).toBe("query: ")
+	test("guesses a profile by family for an unbenchmarked model", () => {
+		expect(resolveConfig({ embeddingModel: "someone/bge-tiny-en" }, {}).config.pooling).toBe("cls")
+		expect(resolveConfig({ embeddingModel: "someone/e5-tiny" }, {}).config.documentPrefix).toBe("passage: ")
+		// Unknown family: mean pooling and no prefixes are the safer assumption.
+		const unknown = resolveConfig({ embeddingModel: "someone/mystery-model" }, {}).config
+		expect(unknown.pooling).toBe("mean")
+		expect(unknown.queryPrefix).toBe("")
+	})
+
+	test("lets an explicit option override what the model profile chose", () => {
+		const { config } = resolveConfig(
+			{ embeddingModel: "Xenova/bge-small-en-v1.5", pooling: "mean", queryPrefix: "", injectThreshold: 0.4 },
+			{},
+		)
+		expect(config.pooling).toBe("mean")
+		expect(config.queryPrefix).toBe("")
+		expect(config.injectThreshold).toBe(0.4)
+	})
+
+	test("rejects an invalid pooling value", () => {
+		const { config, warnings } = resolveConfig({ pooling: "average" }, {})
+		expect(config.pooling).toBe(DEFAULTS.pooling)
+		expect(warnings.join()).toContain("pooling")
+	})
+
+	test("changing pooling or the document prefix invalidates stored vectors", () => {
+		const a = resolveConfig({ embeddingModel: "Xenova/bge-small-en-v1.5" }, {}).config
+		const b = resolveConfig({ embeddingModel: "Xenova/bge-small-en-v1.5", pooling: "mean" }, {}).config
+		expect(embeddingSignature(a)).not.toBe(embeddingSignature(b))
 	})
 })

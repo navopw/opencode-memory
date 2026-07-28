@@ -1,4 +1,4 @@
-import type { Config } from "./config.ts"
+import { embeddingSignature, type Config } from "./config.ts"
 
 export type EmbedFn = (text: string, isQuery: boolean) => Promise<number[]>
 
@@ -9,7 +9,8 @@ type EmbedderState = {
 	failedAt: number
 }
 
-// Keyed by model name so two plugin instances configured alike share one model.
+// Keyed by the full embedding signature, so two instances that differ only in
+// pooling or prefix do not share one extractor.
 const registry = new Map<string, EmbedderState>()
 
 const stateFor = (model: string): EmbedderState => {
@@ -32,11 +33,11 @@ export function setEmbedder(model: string, fn: EmbedFn | null) {
 	registry.set(model, { fn, promise: null, failedAt: fn ? 0 : Date.now() })
 }
 
-export const isEmbedderReady = (config: Config) => stateFor(config.embeddingModel).fn !== null
+export const isEmbedderReady = (config: Config) => stateFor(embeddingSignature(config)).fn !== null
 
 /** Starts the model load if it is not running yet. Never throws. */
 function loadEmbedder(config: Config): Promise<EmbedFn | null> {
-	const state = stateFor(config.embeddingModel)
+	const state = stateFor(embeddingSignature(config))
 	if (state.fn) return Promise.resolve(state.fn)
 	if (state.promise) return state.promise
 	if (state.failedAt && Date.now() - state.failedAt < config.embedderRetryMs) return Promise.resolve(null)
@@ -46,8 +47,8 @@ function loadEmbedder(config: Config): Promise<EmbedFn | null> {
 			const { pipeline } = await import("@huggingface/transformers")
 			const extractor = await pipeline("feature-extraction", config.embeddingModel)
 			const fn: EmbedFn = async (text, isQuery) => {
-				const input = (isQuery ? config.queryPrefix : "") + text.slice(0, 2000)
-				const out = await extractor(input, { pooling: "cls", normalize: true })
+				const input = (isQuery ? config.queryPrefix : config.documentPrefix) + text.slice(0, 2000)
+				const out = await extractor(input, { pooling: config.pooling, normalize: true })
 				return out.tolist()[0] as number[]
 			}
 			state.fn = fn
@@ -81,7 +82,7 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> =>
  * here would stall every turn for the full timeout.
  */
 export async function embedIfReady(config: Config, text: string, isQuery: boolean): Promise<number[] | null> {
-	const state = stateFor(config.embeddingModel)
+	const state = stateFor(embeddingSignature(config))
 	if (!state.fn) {
 		warmEmbedder(config)
 		return null
@@ -96,7 +97,7 @@ export async function embedIfReady(config: Config, text: string, isQuery: boolea
 /** Embeds, waiting for the model to load if necessary. For tool calls only. */
 export async function embed(config: Config, text: string, isQuery: boolean): Promise<number[] | null> {
 	try {
-		const fn = await withTimeout(loadEmbedder(config), config.toolTimeoutMs)
+		const fn = await withTimeout(loadEmbedder(config), config.modelLoadTimeoutMs)
 		if (!fn) return null
 		return await withTimeout(fn(text, isQuery), config.toolTimeoutMs)
 	} catch {

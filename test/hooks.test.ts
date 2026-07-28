@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createHooks } from "../src/hooks.ts"
 import { clearPromptCache } from "../src/prompt.ts"
+import { embeddingSignature } from "../src/config.ts"
 import { clearStoreCache, globalPath, loadStore, roundVector } from "../src/store.ts"
 import type { Memory } from "../src/types.ts"
 import {
@@ -69,7 +70,7 @@ describe("system prompt hook", () => {
 describe("message hook", () => {
 	test("injects a semantically relevant memory", async () => {
 		const config = freshConfig()
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(globalPath(config.dir), [await embedded({ content: "Deploys go through the staging cluster first" })])
 
 		const parts = await runMessage(createHooks(ctxFor(config)), "Deploys go through the staging cluster first")
@@ -78,7 +79,7 @@ describe("message hook", () => {
 
 	test("ignores memories that are not relevant to the message", async () => {
 		const config = freshConfig()
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(globalPath(config.dir), [await embedded({ content: "Deploys go through the staging cluster first" })])
 
 		const parts = await runMessage(createHooks(ctxFor(config)), "what colour is the bikeshed")
@@ -87,7 +88,7 @@ describe("message hook", () => {
 
 	test("does not re-inject the same memory until the cooldown passes", async () => {
 		const config = freshConfig({ reinjectAfterTurns: 3 })
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(globalPath(config.dir), [await embedded({ content: "Deploys go through the staging cluster first" })])
 		const hooks = createHooks(ctxFor(config))
 		const ask = () => runMessage(hooks, "Deploys go through the staging cluster first")
@@ -100,7 +101,7 @@ describe("message hook", () => {
 
 	test("tracks the cooldown per session", async () => {
 		const config = freshConfig()
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(globalPath(config.dir), [await embedded({ content: "Deploys go through the staging cluster first" })])
 		const hooks = createHooks(ctxFor(config))
 		const text = "Deploys go through the staging cluster first"
@@ -112,14 +113,14 @@ describe("message hook", () => {
 
 	test("nudges towards memory_save when the user asks to remember something", async () => {
 		const config = freshConfig()
-		useBrokenEmbedder()
+		useBrokenEmbedder(config)
 		const parts = await runMessage(createHooks(ctxFor(config)), "remember that I prefer tabs")
 		expect(parts.some((p) => p.text.includes("memory_save"))).toBe(true)
 	})
 
 	test("does not treat its own injected parts as user input", async () => {
 		const config = freshConfig()
-		useBrokenEmbedder()
+		useBrokenEmbedder(config)
 		writeStore(globalPath(config.dir), [memory({ content: "bikeshed colour is green", embedding: [] })])
 
 		const parts = await runMessage(createHooks(ctxFor(config)), "unrelated question", {
@@ -130,7 +131,7 @@ describe("message hook", () => {
 
 	test("still retrieves by keyword while the model is unavailable", async () => {
 		const config = freshConfig()
-		useBrokenEmbedder()
+		useBrokenEmbedder(config)
 		writeStore(globalPath(config.dir), [memory({ content: "Deploys use the staging cluster", embedding: [] })])
 
 		const parts = await runMessage(createHooks(ctxFor(config)), "how do deploys reach the staging cluster")
@@ -141,7 +142,7 @@ describe("message hook", () => {
 		// Regression: waiting on the model load here cost every message the full
 		// hook timeout until the download finished.
 		const config = freshConfig({ hookTimeoutMs: 5000 })
-		useBrokenEmbedder()
+		useBrokenEmbedder(config)
 		writeStore(globalPath(config.dir), [memory({ content: "Deploys use the staging cluster", embedding: [] })])
 
 		const started = Date.now()
@@ -153,7 +154,7 @@ describe("message hook", () => {
 		// Regression: these score 0 on cosine forever, so without a backfill they
 		// drop out of injection permanently once the model comes back.
 		const config = freshConfig()
-		useEmbedder()
+		useEmbedder(config)
 		const file = globalPath(config.dir)
 		writeStore(file, [memory({ content: "Deploys use the staging cluster", embedding: [], embeddingModel: null })])
 
@@ -165,12 +166,12 @@ describe("message hook", () => {
 		}
 		const stored = loadStore(file, config).data.memories[0]
 		expect(stored.embedding.length).toBeGreaterThan(0)
-		expect(stored.embeddingModel).toBe(config.embeddingModel)
+		expect(stored.embeddingModel).toBe(embeddingSignature(config))
 	})
 
 	test("never injects pinned memories, which are already in the system prompt", async () => {
 		const config = freshConfig()
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(globalPath(config.dir), [
 			await embedded({ content: "Deploys go through the staging cluster first", pinned: true }),
 		])
@@ -181,7 +182,7 @@ describe("message hook", () => {
 
 	test("caps injection at topK", async () => {
 		const config = freshConfig({ topK: 2 })
-		useEmbedder()
+		useEmbedder(config)
 		writeStore(
 			globalPath(config.dir),
 			await Promise.all(

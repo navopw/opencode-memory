@@ -1,6 +1,6 @@
 {
 	"name": "opencode-memory",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Persistent semantic memory for OpenCode",
 	"type": "module",
 	"private": true,
@@ -16,7 +16,9 @@
 	"scripts": {
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
-		"check": "bun run typecheck && bun test"
+		"check": "bun run typecheck && bun test",
+		"bench": "bun run bench/run.ts",
+		"smoke": "bun run bench/smoke.ts"
 	},
 	"dependencies": {
 		"@huggingface/transformers": "^4.2.0",

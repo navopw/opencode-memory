@@ -1,4 +1,4 @@
-import { STOPWORDS, type Config } from "./config.ts"
+import { embeddingSignature, STOPWORDS, type Config } from "./config.ts"
 import type { Memory } from "./types.ts"
 
 export const tokenize = (text: string, filterStopwords = false): string[] => {
@@ -42,7 +42,7 @@ export const cosine = (a: number[], b: number[]) => {
 
 /** True when the memory's vector was produced by the model we are querying with. */
 export const isComparable = (m: Memory, config: Config) =>
-	m.embedding.length > 0 && m.embeddingModel === config.embeddingModel
+	m.embedding.length > 0 && m.embeddingModel === embeddingSignature(config)
 
 /** Scoring: cosine + exact-token keyword boost + pinned boost. */
 export function score(config: Config, m: Memory, queryEmbedding: number[] | null, queryTokens: string[]): number {

@@ -1,4 +1,4 @@
-import type { Config } from "./config.ts"
+import { embeddingSignature, type Config } from "./config.ts"
 import { embed } from "./embedding.ts"
 import { globalPath, loadStore, projectPath, roundVector, updateStore } from "./store.ts"
 import type { Memory, Scope, ScopedMemory, ScopeFilter } from "./types.ts"
@@ -62,7 +62,7 @@ export async function backfill(config: Config, worktree: string, scope: ScopeFil
 		backfilling.add(file)
 		try {
 			const stale = loadStore(file, config)
-				.data.memories.filter((m) => m.embedding.length === 0 || m.embeddingModel !== config.embeddingModel)
+				.data.memories.filter((m) => m.embedding.length === 0 || m.embeddingModel !== embeddingSignature(config))
 				.slice(0, config.backfillBatch)
 			if (!stale.length) continue
 
@@ -79,7 +79,7 @@ export async function backfill(config: Config, worktree: string, scope: ScopeFil
 					const memory = data.memories.find((m) => m.id === item.id && m.content === item.content)
 					if (!memory) continue
 					memory.embedding = item.embedding
-					memory.embeddingModel = config.embeddingModel
+					memory.embeddingModel = embeddingSignature(config)
 					embedded++
 				}
 			})

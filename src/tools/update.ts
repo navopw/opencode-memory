@@ -1,4 +1,5 @@
 import { tool } from "@opencode-ai/plugin"
+import { embeddingSignature } from "../config.ts"
 import type { PluginContext } from "../context.ts"
 import { embed } from "../embedding.ts"
 import { findMemory } from "../memories.ts"
@@ -32,7 +33,7 @@ export const updateTool = ({ config }: PluginContext) =>
 						if (changesContent) {
 							// Drop a stale vector rather than keep one describing the old text.
 							current.embedding = vector ? roundVector(vector) : []
-							current.embeddingModel = vector ? config.embeddingModel : null
+							current.embeddingModel = vector ? embeddingSignature(config) : null
 						}
 					}
 					if (args.type !== undefined) current.type = args.type

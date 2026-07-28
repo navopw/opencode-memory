@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cosine, diversify, isComparable, isRelevant, keywordHits, score, stem, tokenize } from "../src/scoring.ts"
-import { memory, tmpConfig, TEST_MODEL } from "./helpers.ts"
+import { memory, tmpConfig, TEST_SIGNATURE } from "./helpers.ts"
 
 const config = tmpConfig()
 
@@ -100,7 +100,7 @@ describe("diversify", () => {
 			[0.6, 0.8],
 		]
 		const hits = vectors.map((embedding, i) => ({
-			m: memory({ id: `m${i}`, embedding, embeddingModel: TEST_MODEL }),
+			m: memory({ id: `m${i}`, embedding, embeddingModel: TEST_SIGNATURE }),
 		}))
 		expect(diversify(config, hits, 2)).toHaveLength(2)
 	})

@@ -1,4 +1,5 @@
 import { tool } from "@opencode-ai/plugin"
+import { embeddingSignature } from "../config.ts"
 import type { PluginContext } from "../context.ts"
 import { embed } from "../embedding.ts"
 import { contentKey, storeFor } from "../memories.ts"
@@ -66,7 +67,7 @@ export const saveTool = ({ config }: PluginContext) =>
 						existing.updatedAt = Date.now()
 						if (embedding.length) {
 							existing.embedding = embedding
-							existing.embeddingModel = config.embeddingModel
+							existing.embeddingModel = embeddingSignature(config)
 						}
 						return { memory: existing, updated: true }
 					}
@@ -79,7 +80,7 @@ export const saveTool = ({ config }: PluginContext) =>
 						createdAt: Date.now(),
 						updatedAt: Date.now(),
 						embedding,
-						embeddingModel: embedding.length ? config.embeddingModel : null,
+						embeddingModel: embedding.length ? embeddingSignature(config) : null,
 					}
 					data.memories.push(memory)
 					return { memory, updated: false }

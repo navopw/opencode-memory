@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
+import { embeddingSignature } from "../src/config.ts"
 import { clearStoreCache, globalPath, loadStore, projectPath } from "../src/store.ts"
 import { createTools } from "../src/tools/index.ts"
 import { cleanup, ctxFor, memory, toolCtx, tmpConfig, useBrokenEmbedder, useEmbedder, writeStore } from "./helpers.ts"
@@ -11,9 +12,11 @@ afterEach(() => {
 	clearStoreCache()
 })
 
-function setup(overrides: Parameters<typeof tmpConfig>[0] = {}) {
+function setup(overrides: Parameters<typeof tmpConfig>[0] = {}, embedder: "ok" | "broken" = "ok") {
 	const config = tmpConfig(overrides)
 	configs.push(config)
+	if (embedder === "ok") useEmbedder(config)
+	else useBrokenEmbedder(config)
 	const tools = createTools(ctxFor(config))
 	const worktree = config.dir
 	const call = async <K extends keyof typeof tools>(
@@ -28,7 +31,6 @@ function setup(overrides: Parameters<typeof tmpConfig>[0] = {}) {
 
 describe("memory_save", () => {
 	test("saves, then finds it again through memory_recall", async () => {
-		useEmbedder()
 		const { call } = setup()
 
 		const saved = await call("memory_save", { content: "The deploy pipeline runs on Buildkite", type: "fact" })
@@ -39,7 +41,6 @@ describe("memory_save", () => {
 	})
 
 	test("routes global and project scopes to different stores", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 
 		await call("memory_save", { content: "Prefers tabs over spaces", scope: "global" })
@@ -50,7 +51,6 @@ describe("memory_save", () => {
 	})
 
 	test("updates in place instead of duplicating identical content", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 
 		await call("memory_save", { content: "Prefers tabs", tags: ["style"] })
@@ -63,7 +63,6 @@ describe("memory_save", () => {
 	})
 
 	test("refuses a near-duplicate and points at the existing memory", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 
 		const first = await call("memory_save", { content: "Prefers dark mode" })
@@ -77,7 +76,6 @@ describe("memory_save", () => {
 	})
 
 	test("force overrides the near-duplicate check", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 
 		await call("memory_save", { content: "Prefers dark mode" })
@@ -88,8 +86,7 @@ describe("memory_save", () => {
 	})
 
 	test("still saves when the embedder is unavailable, and says so", async () => {
-		useBrokenEmbedder()
-		const { config, worktree, call } = setup()
+		const { config, worktree, call } = setup({}, "broken")
 
 		const saved = await call("memory_save", { content: "Prefers tabs" })
 		expect(saved).toContain("embedder unavailable")
@@ -97,7 +94,6 @@ describe("memory_save", () => {
 	})
 
 	test("rejects whitespace-only content", async () => {
-		useEmbedder()
 		const { call } = setup()
 		expect(await call("memory_save", { content: "   " })).toContain("nothing saved")
 	})
@@ -105,21 +101,20 @@ describe("memory_save", () => {
 
 describe("memory_recall", () => {
 	test("backfills vectors saved during an outage, then matches semantically", async () => {
-		useBrokenEmbedder()
-		const { config, worktree, call } = setup()
+		const { config, worktree, call } = setup({}, "broken")
 		await call("memory_save", { content: "The deploy pipeline runs on Buildkite" })
 
-		useEmbedder()
+		// The model comes back, and recall re-embeds what the outage left bare.
+		useEmbedder(config)
 		const found = await call("memory_recall", { query: "The deploy pipeline runs on Buildkite" })
 		expect(found).toContain("Buildkite")
 
 		const stored = loadStore(projectPath(config.dir, worktree), config).data.memories[0]
-		expect(stored.embeddingModel).toBe(config.embeddingModel)
+		expect(stored.embeddingModel).toBe(embeddingSignature(config))
 		expect(stored.embedding.length).toBeGreaterThan(0)
 	})
 
 	test("filters by type, tag and scope", async () => {
-		useEmbedder()
 		const { call } = setup()
 		await call("memory_save", { content: "Prefers tabs", type: "preference", tags: ["style"], scope: "global" })
 		await call("memory_save", { content: "Uses Bun as the runtime", type: "fact", tags: ["tooling"] })
@@ -131,14 +126,12 @@ describe("memory_recall", () => {
 	})
 
 	test("reports a clean miss rather than unrelated results", async () => {
-		useEmbedder()
 		const { call } = setup()
 		await call("memory_save", { content: "The deploy pipeline runs on Buildkite" })
 		expect(await call("memory_recall", { query: "favourite pizza topping" })).toContain("No memories found")
 	})
 
 	test("warns when the store contains records it could not read", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 		const file = projectPath(config.dir, worktree)
 		writeStore(file, [memory({ id: "ok", content: "Uses Bun" })])
@@ -153,7 +146,6 @@ describe("memory_recall", () => {
 
 describe("memory_list", () => {
 	test("groups by scope and reports an empty store", async () => {
-		useEmbedder()
 		const { call } = setup()
 		expect(await call("memory_list", {})).toContain("No memories stored yet")
 
@@ -166,7 +158,6 @@ describe("memory_list", () => {
 	})
 
 	test("honours the limit", async () => {
-		useEmbedder()
 		const { call } = setup()
 		for (const n of [1, 2, 3]) await call("memory_save", { content: `Fact number ${n} about the system` })
 		const listed = await call("memory_list", { limit: 2 })
@@ -176,7 +167,6 @@ describe("memory_list", () => {
 
 describe("memory_update", () => {
 	test("re-embeds changed content and replaces tags", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 		const saved = await call("memory_save", { content: "Uses Buildkite", tags: ["ci"] })
 		const id = saved.match(/memory (\S+):/)![1]
@@ -191,7 +181,6 @@ describe("memory_update", () => {
 	})
 
 	test("keeps the vector when only metadata changes", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 		const saved = await call("memory_save", { content: "Uses Buildkite" })
 		const id = saved.match(/memory (\S+):/)![1]
@@ -205,7 +194,6 @@ describe("memory_update", () => {
 	})
 
 	test("reports an unknown id and rejects empty content", async () => {
-		useEmbedder()
 		const { call } = setup()
 		expect(await call("memory_update", { id: "nope", content: "x" })).toContain("No memory with id")
 
@@ -217,7 +205,6 @@ describe("memory_update", () => {
 
 describe("memory_forget", () => {
 	test("deletes by id and reports an unknown id", async () => {
-		useEmbedder()
 		const { config, worktree, call } = setup()
 		const saved = await call("memory_save", { content: "Uses Buildkite" })
 		const id = saved.match(/memory (\S+):/)![1]

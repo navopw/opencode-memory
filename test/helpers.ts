@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { DEFAULTS, type Config } from "../src/config.ts"
+import { DEFAULTS, embeddingSignature, type Config } from "../src/config.ts"
 import type { PluginContext } from "../src/context.ts"
 import type { EmbedFn } from "../src/embedding.ts"
 import { setEmbedder } from "../src/embedding.ts"
@@ -9,6 +9,13 @@ import { clearStoreCache } from "../src/store.ts"
 import type { Memory } from "../src/types.ts"
 
 export const TEST_MODEL = "test/fake-embedder"
+
+/** What tmpConfig()'s signature resolves to, so fixtures count as current. */
+export const TEST_SIGNATURE = embeddingSignature({
+	...DEFAULTS,
+	embeddingModel: TEST_MODEL,
+	queryPrefix: "",
+} as Config)
 
 /** A fresh storage root plus a config pointing at it. */
 export function tmpConfig(overrides: Partial<Config> = {}): Config {
@@ -45,8 +52,9 @@ export const fakeEmbed: EmbedFn = async (text) => {
 	return v.map((x) => x / norm)
 }
 
-export const useEmbedder = (model = TEST_MODEL) => setEmbedder(model, fakeEmbed)
-export const useBrokenEmbedder = (model = TEST_MODEL) => setEmbedder(model, null)
+// Keyed by the same signature the plugin looks up, not just the model name.
+export const useEmbedder = (config: Config) => setEmbedder(embeddingSignature(config), fakeEmbed)
+export const useBrokenEmbedder = (config: Config) => setEmbedder(embeddingSignature(config), null)
 
 export const resetCaches = () => clearStoreCache()
 
@@ -59,7 +67,7 @@ export const memory = (overrides: Partial<Memory> = {}): Memory => ({
 	createdAt: Date.now(),
 	updatedAt: Date.now(),
 	embedding: [1, 0],
-	embeddingModel: TEST_MODEL,
+	embeddingModel: TEST_SIGNATURE,
 	...overrides,
 })
 
