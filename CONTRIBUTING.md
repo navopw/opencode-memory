@@ -30,4 +30,11 @@ model defaults or thresholds.
 - Do not commit memory stores, model artifacts, credentials, or
   `.opencode/memory-id`.
 
+## Dependencies
+
+Dependabot opens weekly pull requests for npm packages and GitHub Actions.
+Minor and patch bumps are grouped into a single PR per ecosystem and merge
+themselves once CI is green; major bumps get their own PR and are reviewed by
+hand.
+
 Report security issues privately as described in [SECURITY.md](SECURITY.md).
