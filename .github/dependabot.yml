@@ -1,6 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  # bun, not npm: the npm ecosystem edits package.json without touching
+  # bun.lock, which fails `bun install --frozen-lockfile` in CI.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
@@ -14,7 +16,7 @@ updates:
       prefix: build
       include: scope
     groups:
-      npm-minor-patch:
+      bun-minor-patch:
         patterns:
           - "*"
         update-types:
