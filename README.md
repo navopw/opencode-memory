@@ -39,13 +39,89 @@ updating the plugin.
 
 ## Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `memory_save` | Save a preference, fact, decision, or todo |
-| `memory_recall` | Search memories by meaning and keywords |
-| `memory_list` | List memories with optional filters |
-| `memory_update` | Update a memory by ID |
-| `memory_forget` | Delete a memory by ID |
+| Tool | Parameters | Purpose |
+| --- | --- | --- |
+| `memory_save` | `content` (required, 1-8000 characters)<br>`type` (`preference`, `fact`, `decision`, or `todo`; default: `fact`)<br>`tags` (up to 50 tags)<br>`pinned` (default: `false`)<br>`scope` (`global` or `project`; default: `project`) | Save a durable memory. An exact content duplicate in the same scope is updated instead of creating another record. |
+| `memory_recall` | `query` (required)<br>`limit` (1-100; default: `5`)<br>`type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`) | Search memories using local semantic similarity and keyword matching. Returns IDs, scopes, types, scores, and tags. |
+| `memory_list` | `type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`)<br>`limit` (1-100; default: `50`) | List saved memories, ordered by most recently updated. |
+| `memory_update` | `id` (required)<br>`content` (optional, 1-8000 characters)<br>`type` (optional)<br>`tags` (optional; replaces all tags)<br>`pinned` (optional) | Update a memory by ID. Changed content is re-embedded automatically. |
+| `memory_forget` | `id` (required) | Permanently delete a memory by ID. |
+
+## Context Injection
+
+```text
+                              +-----------------------+
+                              | OpenCode starts       |
+                              +-----------+-----------+
+                                          |
+                                          v
+                              +-----------------------+
+                              | Warm local BGE model  |
+                              | in the background     |
+                              +-----------------------+
+
++-----------------------+     +-----------------------+
+| Global memory store   |---->| System prompt hook    |
+| memories.json         |     |                       |
++-----------------------+     | - Up to 10 pinned     |
+                              | - Up to 30 recent     |----+
++-----------------------+     | - Last 90 days        |    |
+| Project memory store  |---->|                       |    |
+| projects/<hash>.json  |     +-----------------------+    |
++-----------+-----------+                                  |
+            |                                              |
+            |                                              v
+            |                                  +-----------------------+
+            |                                  | LLM request           |
+            |                                  |                       |
+            |                                  | System memory index   |
+            |                                  | + user message        |
+            |                                  | + relevant memories   |
+            |                                  +-----------+-----------+
+            |                                              ^
+            v                                              |
++-----------------------+     +-----------------------+    |
+| New user message      |---->| Message hook          |    |
++-----------------------+     |                       |    |
+                              | 1. Embed query locally|    |
+                              | 2. Score both stores  |    |
+                              | 3. Diversify matches  |    |
+                              | 4. Select up to 5     |----+
+                              +-----------+-----------+
+                                          |
+                              Embeddings unavailable?
+                                          |
+                                          v
+                              +-----------------------+
+                              | Use keyword matching  |
+                              +-----------------------+
+
++-----------------------+     +-----------------------+
+| "Remember ..." text   |---->| Add synthetic reminder|
++-----------------------+     | to consider calling   |
+                              | memory_save           |
+                              +-----------------------+
+
++-----------------------+     +-----------------------+
+| Memory tool call      |---->| Lock store            |
+| save/update/forget    |     | and atomically write  |
++-----------------------+     +-----------------------+
+```
+
+The system prompt hook adds a compact, stable index of pinned and recent
+memories. This gives the model standing preferences and a small overview
+without searching the complete store on every turn.
+
+The message hook separately searches both scopes for the current user message.
+It injects matching, unpinned memories as a synthetic text part inside a
+`<memory-context>` block. Entries are JSON-quoted and explicitly marked as user
+data, not instructions. A memory is not injected into the same session again
+for eight turns.
+
+When a message contains phrases such as "remember" or "do not forget", the
+plugin also adds a synthetic reminder that asks the model to consider using
+`memory_save`. The model still decides whether the information is durable
+enough to save.
 
 Global memories are stored in
 `~/.config/opencode/memory/memories.json`. Project memories are stored in
