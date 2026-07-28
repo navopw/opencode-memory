@@ -69,8 +69,8 @@ export type ModelProfile = Pick<Config, "pooling" | "queryPrefix" | "documentPre
  * All four travel together because none of them is portable. Mispooling a model
  * still yields plausible-looking vectors that retrieve measurably worse, and a
  * threshold tuned for one model is meaningless for another: bge-small separates
- * relevant from irrelevant pairs at 0.74 against 0.48, while multilingual-e5
- * puts the same split at 0.90 against 0.77.
+ * relevant from irrelevant pairs at 0.79 against 0.49, while multilingual-e5
+ * puts the same split at 0.93 against 0.77.
  *
  * Thresholds are the F1-optimal value measured by `bun run bench`. Only models
  * that have actually been benchmarked are listed here.
@@ -80,21 +80,21 @@ export const MODEL_PROFILES: Record<string, ModelProfile> = {
 		pooling: "mean",
 		queryPrefix: "",
 		documentPrefix: "",
-		injectThreshold: 0.51,
+		injectThreshold: 0.59,
 	},
 	"Xenova/bge-small-en-v1.5": {
 		pooling: "cls",
 		queryPrefix: BGE_QUERY_PREFIX,
 		documentPrefix: "",
-		injectThreshold: 0.69,
+		injectThreshold: 0.77,
 	},
 	"Xenova/multilingual-e5-small": {
 		pooling: "mean",
 		queryPrefix: "query: ",
 		documentPrefix: "passage: ",
-		injectThreshold: 0.88,
+		injectThreshold: 0.91,
 	},
-	"Xenova/all-MiniLM-L6-v2": { pooling: "mean", queryPrefix: "", documentPrefix: "", injectThreshold: 0.42 },
+	"Xenova/all-MiniLM-L6-v2": { pooling: "mean", queryPrefix: "", documentPrefix: "", injectThreshold: 0.53 },
 }
 
 /**
@@ -106,16 +106,16 @@ export function profileFor(model: string): ModelProfile {
 	const known = MODEL_PROFILES[model]
 	if (known) return known
 	if (/e5/i.test(model))
-		return { pooling: "mean", queryPrefix: "query: ", documentPrefix: "passage: ", injectThreshold: 0.88 }
+		return { pooling: "mean", queryPrefix: "query: ", documentPrefix: "passage: ", injectThreshold: 0.91 }
 	if (/bge/i.test(model))
-		return { pooling: "cls", queryPrefix: BGE_QUERY_PREFIX, documentPrefix: "", injectThreshold: 0.69 }
+		return { pooling: "cls", queryPrefix: BGE_QUERY_PREFIX, documentPrefix: "", injectThreshold: 0.77 }
 	return { pooling: "mean", queryPrefix: "", documentPrefix: "", injectThreshold: 0.45 }
 }
 
 /**
- * Multilingual by default: it matched the best English recall in the benchmark
- * while being the only candidate to answer every cross-lingual query, and its
- * wide similarity gap makes the fixed injection threshold forgiving.
+ * Multilingual by default: it has the best cross-lingual recall in the expanded
+ * benchmark while retaining strong overall ranking, and its wide similarity gap
+ * makes the fixed injection threshold forgiving.
  */
 export const DEFAULT_MODEL = "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
 

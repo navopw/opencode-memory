@@ -43,13 +43,13 @@ describe("config", () => {
 		expect(bge.pooling).toBe("cls")
 		expect(bge.queryPrefix).toContain("Represent this sentence")
 		expect(bge.documentPrefix).toBe("")
-		expect(bge.injectThreshold).toBe(0.69)
+		expect(bge.injectThreshold).toBe(0.77)
 
 		const e5 = resolveConfig({ embeddingModel: "Xenova/multilingual-e5-small" }, {}).config
 		expect(e5.pooling).toBe("mean")
 		expect(e5.queryPrefix).toBe("query: ")
 		expect(e5.documentPrefix).toBe("passage: ")
-		expect(e5.injectThreshold).toBe(0.88)
+		expect(e5.injectThreshold).toBe(0.91)
 	})
 
 	test("guesses a profile by family for an unbenchmarked model", () => {

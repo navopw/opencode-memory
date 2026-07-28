@@ -4,8 +4,10 @@ import * as path from "node:path"
 import {
 	clearStoreCache,
 	globalPath,
+	legacyProjectPath,
 	loadStore,
 	parseStore,
+	projectIdPath,
 	projectPath,
 	updateStore,
 } from "../src/store.ts"
@@ -134,6 +136,67 @@ describe("locking", () => {
 		expect(fs.existsSync(`${file}.lock`)).toBe(false)
 	})
 
+	test("does not break a stale lock owned by a live process", () => {
+		const config = freshConfig({ lockStaleMs: 1000 })
+		const file = globalPath(config.dir)
+		const lock = `${file}.lock`
+		fs.mkdirSync(path.dirname(file), { recursive: true })
+		fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, token: "live-owner" }))
+		const old = new Date(Date.now() - 60_000)
+		fs.utimesSync(lock, old, old)
+
+		expect(() => updateStore(file, config, () => {})).toThrow("busy")
+		expect(fs.existsSync(lock)).toBe(true)
+		fs.unlinkSync(lock)
+	})
+
+	test("allows only one process to recover a stale lock", () => {
+		const config = freshConfig({ lockStaleMs: 1000 })
+		const file = globalPath(config.dir)
+		const lock = `${file}.lock`
+		fs.mkdirSync(path.dirname(file), { recursive: true })
+		fs.writeFileSync(lock, "")
+		fs.mkdirSync(`${lock}.recovery`)
+		const old = new Date(Date.now() - 60_000)
+		fs.utimesSync(lock, old, old)
+
+		expect(() => updateStore(file, config, () => {})).toThrow("busy")
+		expect(fs.existsSync(lock)).toBe(true)
+		fs.rmdirSync(`${lock}.recovery`)
+		fs.unlinkSync(lock)
+	})
+
+	test("recovers an abandoned stale-lock guard", () => {
+		const config = freshConfig({ lockStaleMs: 1000 })
+		const file = globalPath(config.dir)
+		const lock = `${file}.lock`
+		const recovery = `${lock}.recovery`
+		fs.mkdirSync(path.dirname(file), { recursive: true })
+		fs.writeFileSync(lock, "")
+		fs.mkdirSync(recovery)
+		const old = new Date(Date.now() - 60_000)
+		fs.utimesSync(lock, old, old)
+		fs.utimesSync(recovery, old, old)
+
+		updateStore(file, config, (data) => data.memories.push(memory()))
+		expect(loadStore(file, config).data.memories).toHaveLength(1)
+		expect(fs.existsSync(recovery)).toBe(false)
+	})
+
+	test("does not remove a replacement lock when releasing", () => {
+		const config = freshConfig()
+		const file = globalPath(config.dir)
+		const lock = `${file}.lock`
+
+		updateStore(file, config, () => {
+			fs.unlinkSync(lock)
+			fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, token: "replacement" }))
+		})
+
+		expect(fs.existsSync(lock)).toBe(true)
+		fs.unlinkSync(lock)
+	})
+
 	test("releases the lock when the update callback throws", () => {
 		const config = freshConfig()
 		const file = globalPath(config.dir)
@@ -149,13 +212,17 @@ describe("locking", () => {
 })
 
 describe("project isolation", () => {
-	test("stores project memories outside the worktree, keyed by canonical path", () => {
+	test("stores project memories outside the worktree, keyed by a local marker", () => {
 		const config = freshConfig()
 		const worktree = path.join(config.dir, "project")
 		fs.mkdirSync(worktree)
-		const store = projectPath(config.dir, worktree)
+		const store = projectPath(config, worktree, true)
+		const id = fs.readFileSync(projectIdPath(worktree), "utf8").trim()
 		expect(store.startsWith(path.join(config.dir, "projects"))).toBe(true)
 		expect(path.dirname(path.dirname(store))).toBe(config.dir)
+		expect(path.basename(store)).toBe(`${id}.json`)
+		expect(fs.statSync(projectIdPath(worktree)).mode & 0o777).toBe(0o600)
+		expect(fs.readdirSync(path.dirname(projectIdPath(worktree))).filter((f) => f.includes(".tmp-"))).toEqual([])
 	})
 
 	test("gives two worktrees two different stores", () => {
@@ -164,6 +231,64 @@ describe("project isolation", () => {
 		const b = path.join(config.dir, "b")
 		fs.mkdirSync(a)
 		fs.mkdirSync(b)
-		expect(projectPath(config.dir, a)).not.toBe(projectPath(config.dir, b))
+		expect(projectPath(config, a, true)).not.toBe(projectPath(config, b, true))
+	})
+
+	test("does not add a marker when an empty project is only read", () => {
+		const config = freshConfig()
+		const worktree = path.join(config.dir, "project")
+		fs.mkdirSync(worktree)
+
+		projectPath(config, worktree)
+		expect(fs.existsSync(projectIdPath(worktree))).toBe(false)
+	})
+
+	test("keeps the same store when a non-git worktree moves", () => {
+		const config = freshConfig()
+		const original = path.join(config.dir, "project-a")
+		const moved = path.join(config.dir, "archive", "project-a")
+		fs.mkdirSync(original)
+		const before = projectPath(config, original, true)
+		fs.mkdirSync(path.dirname(moved))
+		fs.renameSync(original, moved)
+
+		expect(projectPath(config, moved)).toBe(before)
+	})
+
+	test("migrates the canonical-path store on first access", () => {
+		const config = freshConfig()
+		const worktree = path.join(config.dir, "project")
+		fs.mkdirSync(worktree)
+		const legacy = legacyProjectPath(config.dir, worktree)
+		writeStore(legacy, [memory({ content: "legacy project memory" })])
+
+		const current = projectPath(config, worktree)
+		expect(current).not.toBe(legacy)
+		expect(fs.existsSync(legacy)).toBe(false)
+		expect(fs.statSync(current).mode & 0o777).toBe(0o600)
+		expect(loadStore(current, config).data.memories[0].content).toBe("legacy project memory")
+	})
+
+	test("fails safely instead of writing through a contended legacy migration", () => {
+		const config = freshConfig()
+		const worktree = path.join(config.dir, "project")
+		fs.mkdirSync(worktree)
+		const legacy = legacyProjectPath(config.dir, worktree)
+		writeStore(legacy, [memory({ content: "legacy project memory" })])
+		fs.writeFileSync(`${legacy}.lock`, JSON.stringify({ pid: process.pid, token: "old-writer" }))
+
+		expect(() => projectPath(config, worktree)).toThrow("Failed to migrate")
+		expect(fs.existsSync(legacy)).toBe(true)
+		fs.unlinkSync(`${legacy}.lock`)
+		expect(projectPath(config, worktree)).not.toBe(legacy)
+	})
+
+	test("rejects an invalid project marker", () => {
+		const config = freshConfig()
+		const worktree = path.join(config.dir, "project")
+		fs.mkdirSync(path.dirname(projectIdPath(worktree)), { recursive: true })
+		fs.writeFileSync(projectIdPath(worktree), "../../other-project")
+
+		expect(() => projectPath(config, worktree)).toThrow("Invalid project memory id")
 	})
 })

@@ -3,9 +3,9 @@
 Persistent semantic memory for [OpenCode](https://opencode.ai/).
 
 The plugin gives OpenCode five tools for saving, recalling, listing, updating,
-and deleting durable memories. It combines local BGE embeddings with keyword
-matching, injects relevant memories into later conversations, and keeps global
-and project-scoped memories separate.
+and deleting durable memories. It combines local multilingual embeddings with
+keyword matching, injects relevant memories into later conversations, and keeps
+global and project-scoped memories separate.
 
 ## Status
 
@@ -16,8 +16,8 @@ uses an experimental system prompt hook.
 
 - Local multilingual embeddings through Transformers.js and ONNX, no data leaves
   the machine to build them; a German question finds an English memory
-- Global memories shared across projects, project memories keyed by canonical
-  worktree path and stored outside the repository
+- Global memories shared across projects, project memories keyed by a stable
+  `.opencode/memory-id` marker and stored outside the repository
 - Keyword retrieval whenever a vector is unavailable, so memories are never
   silently unreachable
 - Retrieval never blocks a turn on the model load
@@ -28,26 +28,66 @@ uses an experimental system prompt hook.
 
 ## Install
 
-Requires [Bun](https://bun.sh/) and OpenCode.
+Supports macOS and Linux. Requires [Bun](https://bun.sh/) `1.3.0` or newer and
+OpenCode `1.18.x`.
 
 ```sh
 git clone https://github.com/navopw/opencode-memory.git
 cd opencode-memory
-bun install
+bun install --frozen-lockfile
+mkdir -p ~/.config/opencode/plugins
 ln -s "$PWD/src/index.ts" ~/.config/opencode/plugins/memory.ts
 ```
 
 OpenCode automatically loads TypeScript files in `~/.config/opencode/plugins/`.
-Quit and restart OpenCode after installing or updating the plugin.
+Quit and restart OpenCode after installing the plugin. The first startup
+downloads the default embedding model from Hugging Face and caches it locally,
+so it can take several minutes and use several hundred megabytes of disk space.
+Memory text is not sent to Hugging Face.
+
+Verify the installation by opening OpenCode and asking it to list its memory
+tools. `memory_save`, `memory_recall`, `memory_list`, `memory_update`, and
+`memory_forget` should be available.
 
 To pass configuration, reference the plugin from `opencode.jsonc` instead of
 symlinking it:
 
 ```jsonc
 {
-  "plugin": [["/absolute/path/to/opencode-memory/src/index.ts", { "topK": 8 }]]
+	"$schema": "https://opencode.ai/config.json",
+	"plugin": [["/absolute/path/to/opencode-memory/src/index.ts", { "topK": 8 }]]
 }
 ```
+
+Use only one installation method. Loading both the symlink and the config entry
+registers the plugin twice. This project is distributed from source and is not
+published to npm.
+
+### Update
+
+Quit every running OpenCode process before updating so no older plugin instance
+can write while storage migrations run.
+
+```sh
+cd /path/to/opencode-memory
+git pull --ff-only
+bun install --frozen-lockfile
+```
+
+Restart OpenCode after updating.
+
+### Remove
+
+For a symlink installation:
+
+```sh
+rm ~/.config/opencode/plugins/memory.ts
+```
+
+For a config installation, remove the plugin entry from `opencode.jsonc`.
+Removing the plugin does not delete memory data. Delete
+`~/.config/opencode/memory/` separately only if you intend to erase every saved
+memory.
 
 ## Configuration
 
@@ -93,10 +133,10 @@ similarity scores sit on a different scale.
 
 | Model | Languages | Threshold | Notes |
 | --- | --- | --- | --- |
-| `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 50+ | `0.51` | Default. Best cross-lingual retrieval and the widest margin between relevant and irrelevant. |
-| `Xenova/bge-small-en-v1.5` | English | `0.69` | Previous default. Slightly better ranking on English, weak on other languages. |
-| `Xenova/multilingual-e5-small` | 94 | `0.88` | Multilingual, but relevant and irrelevant scores sit close together, so the threshold is fragile. |
-| `Xenova/all-MiniLM-L6-v2` | English | `0.42` | Smallest and fastest. |
+| `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 50+ | `0.59` | Default. Best cross-lingual recall with strong overall ranking and a wide similarity gap. |
+| `Xenova/bge-small-en-v1.5` | English | `0.77` | Strong English paraphrase recall, weak on other languages. |
+| `Xenova/multilingual-e5-small` | 100 | `0.91` | Multilingual, but relevant and irrelevant scores sit close together, so the threshold is fragile. |
+| `Xenova/all-MiniLM-L6-v2` | English | `0.53` | Smallest and fastest, with the best English paraphrase recall. |
 
 Any other model falls back to a family guess and may need `injectThreshold`
 tuned by hand; add it to `bench/run.ts` to measure the right value.
@@ -107,19 +147,19 @@ in the background over the following turns.
 
 ## Benchmark
 
-`bun run bench` scores the real retrieval code against a labelled corpus of 30
-memories and 36 queries in `bench/dataset.ts`, covering English paraphrases,
-literal keyword matches, German questions against English memories, and nonsense
+`bun run bench` scores the real retrieval code against a labelled corpus of 107
+memories and 268 queries in `bench/dataset.ts`, covering English and German
+paraphrases, literal keyword matches, cross-lingual retrieval, and nonsense
 queries that should return nothing.
 
 ```
 model                                  recall@5 MRR@5  para  lex   xling best t F1    noise
-keyword only (no model)                  65%      59%    60%  100%   50% 0.06     45%    0%
-bge-small-en-v1.5                        90%      80%    90%  100%   83% 0.69     64%   20%
-multilingual-e5-small                    90%      75%    90%  100%   83% 0.88     65%    0%
-multilingual-e5-small [WRONG cls pooling]  81%      66%    70%  100%  100% 0.98     58%    0%
-paraphrase-multilingual-MiniLM-L12       94%      78%    90%  100%  100% 0.51     64%    0%
-all-MiniLM-L6-v2 (english only)          94%      81%    95%  100%   83% 0.42     64%    0%
+keyword only (no model)                  75%      65%    75%  100%   51% 0.06     58%    5%
+bge-small-en-v1.5                        82%      74%    91%  100%   53% 0.77     63%    0%
+multilingual-e5-small                    87%      79%    88%  100%   75% 0.91     61%    0%
+multilingual-e5-small [WRONG cls pooling]  83%      75%    82%  100%   70% 0.98     61%    5%
+paraphrase-multilingual-MiniLM-L12       87%      80%    84%  100%   79% 0.59     64%    0%
+all-MiniLM-L6-v2 (english only)          81%      74%    93%  100%   47% 0.53     64%    0%
 ```
 
 `noise` is the share of nonsense queries that would still inject something.
@@ -128,13 +168,13 @@ all-MiniLM-L6-v2 (english only)          94%      81%    95%  100%   83% 0.42   
 
 Three things this measures that are easy to get wrong:
 
-- **Keyword fallback is much worse than embeddings**, 65% against 94% recall. It
+- **Keyword fallback is much worse than embeddings**, 75% against 87% recall. It
   is a safety net for a cold or broken model, not an equivalent path.
-- **Pooling matters.** The same model with CLS instead of mean pooling loses 13
-  points of recall and 20 points on paraphrases, while still producing vectors
+- **Pooling matters.** The same model with CLS instead of mean pooling loses 4
+  points of recall and 6 points on paraphrases, while still producing vectors
   that look perfectly normal.
-- **Thresholds do not transfer.** Relevant and irrelevant pairs average 0.74 and
-  0.48 under bge-small, but 0.90 and 0.77 under multilingual-e5. A single global
+- **Thresholds do not transfer.** Relevant and irrelevant pairs average 0.79 and
+  0.49 under bge-small, but 0.93 and 0.77 under multilingual-e5. A single global
   default cannot serve both.
 
 `bun run smoke` is a faster end-to-end check against the real default model,
@@ -144,7 +184,7 @@ useful after changing the model or its profile.
 
 | Tool | Parameters | Purpose |
 | --- | --- | --- |
-| `memory_save` | `content` (required, 1-8000 characters)<br>`type` (`preference`, `fact`, `decision`, or `todo`; default: `fact`)<br>`tags` (up to 50 tags)<br>`pinned` (default: `false`)<br>`scope` (`global` or `project`; default: `project`)<br>`force` (default: `false`) | Save a durable memory. Identical content is updated in place. Near-duplicate content is refused unless `force` is set. |
+| `memory_save` | `content` (required, 1-8000 characters)<br>`type` (`preference`, `fact`, `decision`, or `todo`; default: `fact`)<br>`tags` (up to 50 tags, each 1-50 characters)<br>`pinned` (default: `false`)<br>`scope` (`global` or `project`; default: `project`)<br>`force` (default: `false`) | Save a durable memory. Identical content is updated in place. Near-duplicate content is refused unless `force` is set. |
 | `memory_recall` | `query` (required)<br>`limit` (1-100; default: `5`)<br>`type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`) | Search memories using local semantic similarity and keyword matching. Returns IDs, scopes, types, scores, and tags. |
 | `memory_list` | `type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`)<br>`limit` (1-100; default: `50`) | List saved memories, ordered by most recently updated. |
 | `memory_update` | `id` (required)<br>`content` (optional, 1-8000 characters)<br>`type` (optional)<br>`tags` (optional; replaces all tags)<br>`pinned` (optional) | Update a memory by ID. Changed content is re-embedded automatically. |
@@ -170,7 +210,7 @@ useful after changing the model or its profile.
                               | - Up to 30 recent     |----+
 +-----------------------+     | - Last 90 days        |    |
 | Project memory store  |---->|                       |    |
-| projects/<hash>.json  |     +-----------------------+    |
+| projects/<id>.json    |     +-----------------------+    |
 +-----------+-----------+                                  |
             |                                              |
             |                                              v
@@ -248,8 +288,14 @@ per turn, so the store heals itself without a manual pass.
 ## Storage
 
 Global memories are stored in `~/.config/opencode/memory/memories.json`. Project
-memories are stored in `~/.config/opencode/memory/projects/`, keyed by a hash of
-the canonical worktree path.
+memories are stored in `~/.config/opencode/memory/projects/`, keyed by the UUID
+in the worktree's local `.opencode/memory-id` marker. Keep this marker untracked
+by adding `.opencode/memory-id` to the project's `.gitignore`. It moves when the
+local folder is renamed or moved, but a fresh clone gets its own project memory
+store. Memory content remains outside the project. Existing canonical-path
+stores are migrated automatically on first access. New markers are created
+lazily when the first project memory is saved. If the worktree cannot be
+written, the plugin falls back to the canonical-path key.
 
 Writes take a lock file, are fsynced, and are renamed into place, so a crash or
 a second OpenCode window cannot interleave two updates.
@@ -266,15 +312,45 @@ Embedding inference runs locally, but recalled memory text is added to prompts
 and is therefore sent to the selected model provider. Do not store secrets,
 credentials, or information that should not be shared with that provider.
 
-Memory stores and model artifacts are excluded from this repository. Project
-memories are not read from repository-controlled files.
+Memory text is treated as untrusted quoted data. The prompt applies relevant
+facts and preferences but does not treat memory text as authorization to
+disclose unrelated memories or perform unrelated tool calls. Language models
+cannot provide a hard security boundary, so save only content you trust as
+future context.
+
+Memory stores and model artifacts are excluded from this repository. A project
+controls only its random memory ID; memory content remains in the user-owned
+storage directory.
+
+## Troubleshooting
+
+- **Memory tools are missing:** confirm that the symlink target exists, use only
+  one installation method, then quit and restart OpenCode.
+- **A tool reports keyword-only search:** the model is still downloading or a
+  previous model load failed. Check the OpenCode log and retry after the
+  configured `embedderRetryMs` interval.
+- **A memory store is busy:** quit other OpenCode processes using the store and
+  retry. Stale locks recover automatically. Remove `<store>.lock` or
+  `<store>.lock.recovery` only when no OpenCode process is running.
+- **A store is damaged:** whole-file errors are never overwritten. Restore the
+  JSON file manually; partial-record recovery keeps the original as
+  `<store>.corrupt` before the next write.
 
 ## Development
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run check
+bun audit
 ```
+
+`bun run smoke` downloads and exercises the real default model. Run it after
+changing embedding, scoring, or model-profile behavior. `bun run bench` runs the
+full labelled retrieval benchmark.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow,
+[SECURITY.md](SECURITY.md) for private vulnerability reporting, and
+[CHANGELOG.md](CHANGELOG.md) for release history.
 
 ```text
 src/
@@ -288,7 +364,7 @@ src/
   memories.ts     cross-store queries and embedding backfill
   prompt.ts       the cached system prompt block
   hooks.ts        system prompt and message hooks
-  tools/          one file per tool
+  tools/          tool implementations, registry, and shared schemas
 ```
 
 ```text

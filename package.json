@@ -2,8 +2,19 @@
 	"name": "opencode-memory",
 	"version": "0.3.0",
 	"description": "Persistent semantic memory for OpenCode",
+	"keywords": [
+		"opencode",
+		"memory",
+		"semantic-search",
+		"local-first"
+	],
 	"type": "module",
 	"private": true,
+	"packageManager": "bun@1.3.14",
+	"os": [
+		"darwin",
+		"linux"
+	],
 	"license": "MIT",
 	"author": "Stanislav Hetzel",
 	"files": [
@@ -12,6 +23,10 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/navopw/opencode-memory.git"
+	},
+	"homepage": "https://github.com/navopw/opencode-memory#readme",
+	"bugs": {
+		"url": "https://github.com/navopw/opencode-memory/issues"
 	},
 	"scripts": {
 		"test": "bun test",
@@ -22,13 +37,19 @@
 	},
 	"dependencies": {
 		"@huggingface/transformers": "^4.2.0",
-		"@opencode-ai/plugin": "1.18.7",
-		"@opencode-ai/sdk": "1.18.7"
+		"@opencode-ai/plugin": "1.18.8",
+		"@opencode-ai/sdk": "1.18.8",
+		"proper-lockfile": "^4.1.2"
 	},
 	"devDependencies": {
-		"@types/bun": "latest",
-		"@types/node": "^24.1.0",
-		"typescript": "^5.8.2"
+		"@types/bun": "^1.3.14",
+		"@types/node": "^26.1.2",
+		"@types/proper-lockfile": "^4.1.4",
+		"typescript": "^7.0.2"
+	},
+	"overrides": {
+		"adm-zip": "0.6.0",
+		"sharp": "0.35.3"
 	},
 	"trustedDependencies": [
 		"onnxruntime-node"

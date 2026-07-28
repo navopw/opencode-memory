@@ -15,12 +15,12 @@ export const label = (m: Memory, scope: Scope) => `[${m.type}${scope === "projec
 export function scopedStores(config: Config, worktree: string, scope: ScopeFilter) {
 	const out: { scope: Scope; file: string }[] = []
 	if (scope !== "project") out.push({ scope: "global", file: globalPath(config.dir) })
-	if (scope !== "global") out.push({ scope: "project", file: projectPath(config.dir, worktree) })
+	if (scope !== "global") out.push({ scope: "project", file: projectPath(config, worktree) })
 	return out
 }
 
 export const storeFor = (config: Config, worktree: string, scope: Scope) =>
-	scope === "global" ? globalPath(config.dir) : projectPath(config.dir, worktree)
+	scope === "global" ? globalPath(config.dir) : projectPath(config, worktree, true)
 
 export function collect(config: Config, worktree: string, scope: ScopeFilter): ScopedMemory[] {
 	return scopedStores(config, worktree, scope).flatMap(({ scope: s, file }) =>

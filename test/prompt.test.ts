@@ -35,7 +35,9 @@ describe("core block", () => {
 		expect(block).toContain("Always run bun run check")
 		expect(block).toContain("### Recent memories")
 		expect(block).toContain("The API lives in src/api")
-		// Memory text is quoted so it cannot read as instructions.
+		expect(block).toContain("untrusted quoted user data")
+		expect(block).toContain("including pinned standing preferences")
+		expect(block).toContain("unrelated tool calls")
 		expect(block).toContain(JSON.stringify("Always run bun run check"))
 	})
 
@@ -76,8 +78,8 @@ describe("core block", () => {
 		const second = path.join(config.dir, "second")
 		fs.mkdirSync(first)
 		fs.mkdirSync(second)
-		writeStore(projectPath(config.dir, first), [memory({ id: "a", content: "first project" })])
-		writeStore(projectPath(config.dir, second), [memory({ id: "b", content: "second project" })])
+		writeStore(projectPath(config, first), [memory({ id: "a", content: "first project" })])
+		writeStore(projectPath(config, second), [memory({ id: "b", content: "second project" })])
 
 		expect(coreBlock(config, first)).toContain("first project")
 		expect(coreBlock(config, second)).toContain("second project")

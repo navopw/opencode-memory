@@ -191,7 +191,8 @@ for (const r of rows) {
 		`  ${r.label.padEnd(38)} relevant ${r.sim.relevant.toFixed(3)}  irrelevant ${r.sim.irrelevant.toFixed(3)}  gap ${(r.sim.relevant - r.sim.irrelevant).toFixed(3)}`,
 	)
 }
+const negativeCount = QUERIES.filter((q) => q.kind === "negative").length
 console.log(
-	"\nnoise = share of the 5 nonsense queries that would still inject something at the best threshold.",
+	`\nnoise = share of the ${negativeCount} nonsense queries that would still inject something at the best threshold.`,
 )
 console.log("'best t' is the injectThreshold that maximises F1 for that model; the default must match it.")

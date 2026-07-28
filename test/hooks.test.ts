@@ -75,6 +75,8 @@ describe("message hook", () => {
 
 		const parts = await runMessage(createHooks(ctxFor(config)), "Deploys go through the staging cluster first")
 		expect(injected(parts)).toContain("staging cluster")
+		expect(injected(parts)).toContain("untrusted quoted user data")
+		expect(injected(parts)).toContain("unrelated tool calls")
 	})
 
 	test("ignores memories that are not relevant to the message", async () => {

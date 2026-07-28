@@ -47,7 +47,7 @@ describe("memory_save", () => {
 		await call("memory_save", { content: "This repo uses Bun", scope: "project" })
 
 		expect(loadStore(globalPath(config.dir), config).data.memories).toHaveLength(1)
-		expect(loadStore(projectPath(config.dir, worktree), config).data.memories).toHaveLength(1)
+		expect(loadStore(projectPath(config, worktree), config).data.memories).toHaveLength(1)
 	})
 
 	test("updates in place instead of duplicating identical content", async () => {
@@ -57,7 +57,7 @@ describe("memory_save", () => {
 		const again = await call("memory_save", { content: "  prefers   TABS  ", tags: ["formatting"] })
 
 		expect(again).toContain("Updated existing")
-		const stored = loadStore(projectPath(config.dir, worktree), config).data.memories
+		const stored = loadStore(projectPath(config, worktree), config).data.memories
 		expect(stored).toHaveLength(1)
 		expect(stored[0].tags.sort()).toEqual(["formatting", "style"])
 	})
@@ -72,7 +72,7 @@ describe("memory_save", () => {
 		expect(second).toContain("Not saved")
 		expect(second).toContain(id)
 		expect(second).toContain("memory_update")
-		expect(loadStore(projectPath(config.dir, worktree), config).data.memories).toHaveLength(1)
+		expect(loadStore(projectPath(config, worktree), config).data.memories).toHaveLength(1)
 	})
 
 	test("force overrides the near-duplicate check", async () => {
@@ -82,7 +82,7 @@ describe("memory_save", () => {
 		const forced = await call("memory_save", { content: "Prefers dark mode!", force: true })
 
 		expect(forced).toContain("Saved project memory")
-		expect(loadStore(projectPath(config.dir, worktree), config).data.memories).toHaveLength(2)
+		expect(loadStore(projectPath(config, worktree), config).data.memories).toHaveLength(2)
 	})
 
 	test("still saves when the embedder is unavailable, and says so", async () => {
@@ -90,7 +90,7 @@ describe("memory_save", () => {
 
 		const saved = await call("memory_save", { content: "Prefers tabs" })
 		expect(saved).toContain("embedder unavailable")
-		expect(loadStore(projectPath(config.dir, worktree), config).data.memories[0].embeddingModel).toBeNull()
+		expect(loadStore(projectPath(config, worktree), config).data.memories[0].embeddingModel).toBeNull()
 	})
 
 	test("rejects whitespace-only content", async () => {
@@ -109,7 +109,7 @@ describe("memory_recall", () => {
 		const found = await call("memory_recall", { query: "The deploy pipeline runs on Buildkite" })
 		expect(found).toContain("Buildkite")
 
-		const stored = loadStore(projectPath(config.dir, worktree), config).data.memories[0]
+		const stored = loadStore(projectPath(config, worktree), config).data.memories[0]
 		expect(stored.embeddingModel).toBe(embeddingSignature(config))
 		expect(stored.embedding.length).toBeGreaterThan(0)
 	})
@@ -133,7 +133,7 @@ describe("memory_recall", () => {
 
 	test("warns when the store contains records it could not read", async () => {
 		const { config, worktree, call } = setup()
-		const file = projectPath(config.dir, worktree)
+		const file = projectPath(config, worktree)
 		writeStore(file, [memory({ id: "ok", content: "Uses Bun" })])
 		const raw = JSON.parse(fs.readFileSync(file, "utf8"))
 		raw.memories.push({ id: "broken" })
@@ -170,11 +170,11 @@ describe("memory_update", () => {
 		const { config, worktree, call } = setup()
 		const saved = await call("memory_save", { content: "Uses Buildkite", tags: ["ci"] })
 		const id = saved.match(/memory (\S+):/)![1]
-		const before = loadStore(projectPath(config.dir, worktree), config).data.memories[0].embedding
+		const before = loadStore(projectPath(config, worktree), config).data.memories[0].embedding
 
 		await call("memory_update", { id, content: "Uses GitHub Actions", tags: ["pipeline"] })
 
-		const after = loadStore(projectPath(config.dir, worktree), config).data.memories[0]
+		const after = loadStore(projectPath(config, worktree), config).data.memories[0]
 		expect(after.content).toBe("Uses GitHub Actions")
 		expect(after.tags).toEqual(["pipeline"])
 		expect(after.embedding).not.toEqual(before)
@@ -184,11 +184,11 @@ describe("memory_update", () => {
 		const { config, worktree, call } = setup()
 		const saved = await call("memory_save", { content: "Uses Buildkite" })
 		const id = saved.match(/memory (\S+):/)![1]
-		const before = loadStore(projectPath(config.dir, worktree), config).data.memories[0].embedding
+		const before = loadStore(projectPath(config, worktree), config).data.memories[0].embedding
 
 		await call("memory_update", { id, pinned: true })
 
-		const after = loadStore(projectPath(config.dir, worktree), config).data.memories[0]
+		const after = loadStore(projectPath(config, worktree), config).data.memories[0]
 		expect(after.pinned).toBe(true)
 		expect(after.embedding).toEqual(before)
 	})
@@ -210,7 +210,7 @@ describe("memory_forget", () => {
 		const id = saved.match(/memory (\S+):/)![1]
 
 		expect(await call("memory_forget", { id })).toContain("Forgot project memory")
-		expect(loadStore(projectPath(config.dir, worktree), config).data.memories).toHaveLength(0)
+		expect(loadStore(projectPath(config, worktree), config).data.memories).toHaveLength(0)
 		expect(await call("memory_forget", { id })).toContain("No memory with id")
 	})
 })

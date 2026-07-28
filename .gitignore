@@ -4,9 +4,16 @@ coverage/
 .DS_Store
 *.log
 *.tgz
+.env
+.env.*
+.npmrc
+*.key
+*.pem
+credentials.json
 
 # Never commit memory stores or downloaded model artifacts.
 memory/
 memories.json
 .cache/
-.opencode/memory.json
+# Local project identity. Fresh clones intentionally receive a new identity.
+.opencode/memory-id
