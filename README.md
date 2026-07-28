@@ -9,20 +9,24 @@ and project-scoped memories separate.
 
 ## Status
 
-This repository is under active development. It currently targets OpenCode
-`1.18.7` and uses an experimental system prompt hook.
+This repository is under active development. It targets OpenCode `1.18.x` and
+uses an experimental system prompt hook.
 
 ## Features
 
-- Local embeddings through Transformers.js and ONNX
-- Global memories shared across projects
-- Project memories stored outside repositories and keyed by canonical path
-- Keyword fallback when the embedding model is unavailable
-- Atomic writes, restrictive file permissions, schema validation, and store locks
-- Exact duplicate handling without semantic overwrites across scopes
-- Automatic reminders when a user asks OpenCode to remember something
+- Local embeddings through Transformers.js and ONNX, no data leaves the machine
+  to build them
+- Global memories shared across projects, project memories keyed by canonical
+  worktree path and stored outside the repository
+- Keyword retrieval whenever a vector is unavailable, so memories are never
+  silently unreachable
+- Retrieval never blocks a turn on the model load
+- Configurable from `opencode.jsonc` without touching the source
+- Atomic, fsynced writes with restrictive permissions and cross-process locking
+- Damaged records are skipped and reported rather than disabling the plugin
+- Near-duplicate memories are refused instead of quietly accumulating
 
-## Install From Source
+## Install
 
 Requires [Bun](https://bun.sh/) and OpenCode.
 
@@ -33,15 +37,54 @@ bun install
 ln -s "$PWD/src/index.ts" ~/.config/opencode/plugins/memory.ts
 ```
 
-OpenCode automatically loads TypeScript files in
-`~/.config/opencode/plugins/`. Quit and restart OpenCode after installing or
-updating the plugin.
+OpenCode automatically loads TypeScript files in `~/.config/opencode/plugins/`.
+Quit and restart OpenCode after installing or updating the plugin.
+
+To pass configuration, reference the plugin from `opencode.jsonc` instead of
+symlinking it:
+
+```jsonc
+{
+  "plugin": [["/absolute/path/to/opencode-memory/src/index.ts", { "topK": 8 }]]
+}
+```
+
+## Configuration
+
+Every option below can be set in the `opencode.jsonc` plugin entry. Unknown or
+out-of-range values are reported in the OpenCode log and ignored or clamped,
+never fatal.
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `dir` | `~/.config/opencode/memory` | Storage root for both stores. |
+| `embeddingModel` | `Xenova/bge-small-en-v1.5` | Local embedding model. |
+| `queryPrefix` | bge instruction prefix | Prepended to queries before embedding. Cleared automatically for non-bge models. |
+| `topK` | `5` | Max memories injected per user message. |
+| `injectThreshold` | `0.55` | Minimum similarity for automatic injection. The main relevance dial. |
+| `keywordMinHits` | `2` | Keyword matches required when a memory has no comparable vector. |
+| `nearDupeThreshold` | `0.95` | Retrieval hits this similar to a selected hit are skipped. |
+| `duplicateThreshold` | `0.92` | `memory_save` refuses content this similar to an existing memory. |
+| `maxPinned` | `10` | Pinned entries in the system prompt. |
+| `maxIndexLines` | `30` | Recent entries in the system prompt. |
+| `indexMaxAgeDays` | `90` | Age cutoff for the recent index. |
+| `hookTimeoutMs` | `3000` | Inference budget inside hooks. |
+| `toolTimeoutMs` | `15000` | Inference budget inside tool calls. |
+| `reinjectAfterTurns` | `8` | Turns before the same memory may be injected again. |
+| `backfillBatch` | `10` | Memories re-embedded per backfill pass. |
+| `maxStoreBytes` | `10485760` | Refuse to read a store larger than this. |
+| `lockStaleMs` | `30000` | Age at which a lock file is treated as abandoned. |
+| `lockRetries` / `lockRetryMs` | `5` / `40` | Retry policy when another process holds the lock. |
+| `embedderRetryMs` | `300000` | Wait before retrying a failed model load. |
+
+`OPENCODE_MEMORY_DIR`, `OPENCODE_MEMORY_MODEL`, and
+`OPENCODE_MEMORY_QUERY_PREFIX` still work and are overridden by plugin options.
 
 ## Tools
 
 | Tool | Parameters | Purpose |
 | --- | --- | --- |
-| `memory_save` | `content` (required, 1-8000 characters)<br>`type` (`preference`, `fact`, `decision`, or `todo`; default: `fact`)<br>`tags` (up to 50 tags)<br>`pinned` (default: `false`)<br>`scope` (`global` or `project`; default: `project`) | Save a durable memory. An exact content duplicate in the same scope is updated instead of creating another record. |
+| `memory_save` | `content` (required, 1-8000 characters)<br>`type` (`preference`, `fact`, `decision`, or `todo`; default: `fact`)<br>`tags` (up to 50 tags)<br>`pinned` (default: `false`)<br>`scope` (`global` or `project`; default: `project`)<br>`force` (default: `false`) | Save a durable memory. Identical content is updated in place. Near-duplicate content is refused unless `force` is set. |
 | `memory_recall` | `query` (required)<br>`limit` (1-100; default: `5`)<br>`type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`) | Search memories using local semantic similarity and keyword matching. Returns IDs, scopes, types, scores, and tags. |
 | `memory_list` | `type` (optional type filter)<br>`tag` (optional tag filter)<br>`scope` (`all`, `global`, or `project`; default: `all`)<br>`limit` (1-100; default: `50`) | List saved memories, ordered by most recently updated. |
 | `memory_update` | `id` (required)<br>`content` (optional, 1-8000 characters)<br>`type` (optional)<br>`tags` (optional; replaces all tags)<br>`pinned` (optional) | Update a memory by ID. Changed content is re-embedded automatically. |
@@ -83,17 +126,21 @@ updating the plugin.
 +-----------------------+     +-----------------------+    |
 | New user message      |---->| Message hook          |    |
 +-----------------------+     |                       |    |
-                              | 1. Embed query locally|    |
+                              | 1. Embed query if the |    |
+                              |    model is resident  |    |
                               | 2. Score both stores  |    |
                               | 3. Diversify matches  |    |
                               | 4. Select up to 5     |----+
                               +-----------+-----------+
                                           |
-                              Embeddings unavailable?
+                              Model not resident, or
+                              memory has no vector?
                                           |
                                           v
                               +-----------------------+
-                              | Use keyword matching  |
+                              | Score it on keywords, |
+                              | re-embed in the       |
+                              | background            |
                               +-----------------------+
 
 +-----------------------+     +-----------------------+
@@ -103,34 +150,55 @@ updating the plugin.
                               +-----------------------+
 
 +-----------------------+     +-----------------------+
-| Memory tool call      |---->| Lock store            |
-| save/update/forget    |     | and atomically write  |
+| Memory tool call      |---->| Lock store, fsync,    |
+| save/update/forget    |     | rename atomically     |
 +-----------------------+     +-----------------------+
 ```
 
 The system prompt hook adds a compact, stable index of pinned and recent
 memories. This gives the model standing preferences and a small overview
-without searching the complete store on every turn.
+without searching the complete store on every turn. The text is cached on store
+mtimes so it stays byte-identical between turns and does not invalidate prompt
+caching upstream.
 
 The message hook separately searches both scopes for the current user message.
 It injects matching, unpinned memories as a synthetic text part inside a
 `<memory-context>` block. Entries are JSON-quoted and explicitly marked as user
 data, not instructions. A memory is not injected into the same session again
-for eight turns.
+for eight turns; because injected parts stay in the session transcript, this
+prevents repeated entries rather than reducing the tokens already sent.
 
 When a message contains phrases such as "remember" or "do not forget", the
 plugin also adds a synthetic reminder that asks the model to consider using
 `memory_save`. The model still decides whether the information is durable
 enough to save.
 
-Global memories are stored in
-`~/.config/opencode/memory/memories.json`. Project memories are stored in
-`~/.config/opencode/memory/projects/`, keyed by a hash of the canonical
-worktree path. Set `OPENCODE_MEMORY_DIR` to change the storage root.
+### Retrieval without a vector
 
-The default embedding model is `Xenova/bge-small-en-v1.5`. Set
-`OPENCODE_MEMORY_MODEL` to override it. Existing vectors are ignored and
-rebuilt when the configured model changes.
+The model is loaded in the background and hooks never wait for it, so the first
+messages after a cold start are scored on keywords alone rather than stalling
+for the download.
+
+A memory can also lack a usable vector: it was saved during a model outage, or
+`embeddingModel` was changed since. Cosine similarity against such a memory is
+meaningless, so it is scored on keywords instead of being compared and
+discarded. In the background the message hook re-embeds a small batch of these
+per turn, so the store heals itself without a manual pass.
+
+## Storage
+
+Global memories are stored in `~/.config/opencode/memory/memories.json`. Project
+memories are stored in `~/.config/opencode/memory/projects/`, keyed by a hash of
+the canonical worktree path.
+
+Writes take a lock file, are fsynced, and are renamed into place, so a crash or
+a second OpenCode window cannot interleave two updates.
+
+If individual records fail validation they are skipped rather than failing the
+whole store, the original file is copied to `<store>.corrupt` before the next
+write, and `memory_recall` and `memory_list` report how many were dropped.
+Problems affecting the whole file, such as invalid JSON or an unknown schema
+version, still raise an error and are never overwritten.
 
 ## Privacy
 
@@ -147,6 +215,25 @@ memories are not read from repository-controlled files.
 bun install
 bun run check
 ```
+
+```text
+src/
+  index.ts        plugin entry, the only file OpenCode imports
+  config.ts       defaults, bounds, and option resolution
+  context.ts      the context handed to hooks and tools
+  types.ts        Memory and store types
+  store.ts        paths, validation, locking, atomic writes
+  embedding.ts    model lifecycle and the two embed paths
+  scoring.ts      tokenizing, cosine, scoring, relevance, diversification
+  memories.ts     cross-store queries and embedding backfill
+  prompt.ts       the cached system prompt block
+  hooks.ts        system prompt and message hooks
+  tools/          one file per tool
+```
+
+`src/index.ts` default-exports `{ id, server }`. OpenCode reads only the default
+export for that shape, so named exports are safe; the older loader, still used
+for plain function exports, rejects any export that is not a plugin function.
 
 ## License
 
