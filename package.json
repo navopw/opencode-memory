@@ -37,8 +37,8 @@
 	},
 	"dependencies": {
 		"@huggingface/transformers": "^4.2.0",
-		"@opencode-ai/plugin": "1.18.8",
-		"@opencode-ai/sdk": "1.18.8",
+		"@opencode-ai/plugin": "1.18.9",
+		"@opencode-ai/sdk": "1.18.9",
 		"proper-lockfile": "^4.1.2"
 	},
 	"devDependencies": {
