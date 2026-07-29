@@ -30,6 +30,30 @@ model defaults or thresholds.
 - Do not commit memory stores, model artifacts, credentials, or
   `.opencode/memory-id`.
 
+## Releasing
+
+The package is published to npm as
+[`@navopw/opencode-memory`](https://www.npmjs.com/package/@navopw/opencode-memory).
+Releases are cut by pushing a tag; `.github/workflows/release.yml` builds,
+checks, and publishes with npm trusted publishing, so no npm token is stored in
+the repository.
+
+1. Update `CHANGELOG.md` and bump `version` in `package.json`.
+2. Merge that to `main`.
+3. Tag the release and push the tag. The workflow refuses to publish when the
+   tag and `package.json` version disagree.
+
+```sh
+git tag v0.4.0
+git push origin v0.4.0
+```
+
+`bun run build` compiles `src/` to `dist/` with `tsconfig.build.json`, rewriting
+the `.ts` import specifiers to `.js`. Only `dist/` and `src/` are published.
+`bun run scripts/verify-package.ts` loads the build the way OpenCode resolves an
+npm plugin: through `exports["./server"]`, falling back to `main`. OpenCode
+never reads `exports["."]`, so that entry exists for tooling only.
+
 ## Dependencies
 
 Dependabot opens weekly pull requests for npm packages and GitHub Actions.

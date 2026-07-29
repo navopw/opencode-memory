@@ -6,17 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-29
+
 ### Added
 
+- Published to npm as `@navopw/opencode-memory`, installable through the
+  OpenCode `plugin` config array without a source checkout.
+- A build that compiles `src/` to ESM plus type declarations in `dist/`, a
+  packaging job in CI, and a script that loads the build through the entry
+  point OpenCode resolves.
+- A tag-triggered release workflow that publishes with npm trusted publishing
+  and provenance attestations.
 - macOS and Linux CI, security reporting guidance, contribution documentation,
   and assertions for the real-model smoke script.
 
 ### Changed
 
+- Relaxed the `@opencode-ai/plugin` and `@opencode-ai/sdk` dependencies from
+  exact pins to compatible ranges, so an installed plugin can match a newer
+  OpenCode.
 - Updated all direct dependencies and pinned patched transitive ZIP and image
   processing dependencies.
-- Clarified source installation, updates, removal, project identity, model
-  downloads, and the memory trust model.
+- Rewrote installation, updates, and removal around the npm package, and kept
+  the source checkout as the development path.
+- Clarified project identity, model downloads, and the memory trust model.
 - Strengthened lock ownership and memory prompt boundaries.
 
 ### Security

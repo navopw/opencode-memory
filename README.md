@@ -1,5 +1,9 @@
 # opencode-memory
 
+[![npm](https://img.shields.io/npm/v/@navopw/opencode-memory)](https://www.npmjs.com/package/@navopw/opencode-memory)
+[![CI](https://github.com/navopw/opencode-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/navopw/opencode-memory/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Persistent semantic memory for [OpenCode](https://opencode.ai/).
 
 The plugin gives OpenCode five tools for saving, recalling, listing, updating,
@@ -31,26 +35,58 @@ uses an experimental system prompt hook.
 Supports macOS and Linux. Requires [Bun](https://bun.sh/) `1.3.0` or newer and
 OpenCode `1.18.x`.
 
-```sh
-git clone https://github.com/navopw/opencode-memory.git
-cd opencode-memory
-bun install --frozen-lockfile
-mkdir -p ~/.config/opencode/plugins
-ln -s "$PWD/src/index.ts" ~/.config/opencode/plugins/memory.ts
+Add the package to the `plugin` array in your OpenCode config, either
+`~/.config/opencode/opencode.json` for every project or `opencode.json` in a
+single repository:
+
+```jsonc
+{
+	"$schema": "https://opencode.ai/config.json",
+	"plugin": ["@navopw/opencode-memory"]
+}
 ```
 
-OpenCode automatically loads TypeScript files in `~/.config/opencode/plugins/`.
-Quit and restart OpenCode after installing the plugin. The first startup
-downloads the default embedding model from Hugging Face and caches it locally,
-so it can take several minutes and use several hundred megabytes of disk space.
-Memory text is not sent to Hugging Face.
+To change [configuration](docs/configuration.md), use the
+`[package, options]` form instead:
+
+```jsonc
+{
+	"$schema": "https://opencode.ai/config.json",
+	"plugin": [["@navopw/opencode-memory", { "topK": 8 }]]
+}
+```
+
+OpenCode installs the package with Bun on startup and caches it under
+`~/.cache/opencode/node_modules/`. Quit and restart OpenCode after editing the
+config. The first startup also downloads the default embedding model from
+Hugging Face and caches it locally, so it can take several minutes and use
+several hundred megabytes of disk space. Memory text is not sent to Hugging
+Face.
 
 Verify the installation by opening OpenCode and asking it to list its memory
 tools. `memory_save`, `memory_recall`, `memory_list`, `memory_update`, and
 `memory_forget` should be available.
 
-To pass configuration, reference the plugin from `opencode.jsonc` instead of
-symlinking it:
+Pin a version if you would rather approve updates yourself:
+
+```jsonc
+{
+	"plugin": ["@navopw/opencode-memory@0.4.0"]
+}
+```
+
+### From source
+
+Use this only for development, and use only one installation method. A source
+checkout loaded alongside the npm package registers the plugin twice.
+
+```sh
+git clone https://github.com/navopw/opencode-memory.git
+cd opencode-memory
+bun install --frozen-lockfile
+```
+
+Then point the config at the checkout:
 
 ```jsonc
 {
@@ -59,14 +95,27 @@ symlinking it:
 }
 ```
 
-Use only one installation method. Loading both the symlink and the config entry
-registers the plugin twice. This project is distributed from source and is not
-published to npm.
+Alternatively symlink it into the plugin directory, which OpenCode loads
+automatically but which cannot pass options:
+
+```sh
+mkdir -p ~/.config/opencode/plugins
+ln -s "$PWD/src/index.ts" ~/.config/opencode/plugins/memory.ts
+```
 
 ### Update
 
 Quit every running OpenCode process before updating so no older plugin instance
 can write while storage migrations run.
+
+An unpinned npm install picks up the newest release on the next OpenCode
+startup. Clear the cache to force a re-resolve:
+
+```sh
+rm -rf ~/.cache/opencode/node_modules
+```
+
+For a source checkout:
 
 ```sh
 cd /path/to/opencode-memory
@@ -78,13 +127,13 @@ Restart OpenCode after updating.
 
 ### Remove
 
-For a symlink installation:
+Remove the plugin entry from your OpenCode config, or for a symlinked source
+checkout:
 
 ```sh
 rm ~/.config/opencode/plugins/memory.ts
 ```
 
-For a config installation, remove the plugin entry from `opencode.jsonc`.
 Removing the plugin does not delete memory data. Delete
 `~/.config/opencode/memory/` separately only if you intend to erase every saved
 memory.
@@ -103,12 +152,15 @@ memory.
 ```sh
 bun install --frozen-lockfile
 bun run check
+bun run build
 bun audit
 ```
 
 `bun run smoke` downloads and exercises the real default model. Run it after
 changing embedding, scoring, or model-profile behavior. `bun run bench` runs the
-full labelled retrieval benchmark.
+full labelled retrieval benchmark. `bun run build` compiles the published
+`dist/`, and `bun run scripts/verify-package.ts` loads it the way OpenCode
+loads an npm plugin.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow,
 [SECURITY.md](SECURITY.md) for private vulnerability reporting, and
