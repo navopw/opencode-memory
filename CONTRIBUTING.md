@@ -4,9 +4,8 @@ Contributions are welcome through GitHub issues and pull requests.
 
 ## Requirements
 
-- macOS or Linux
-- Bun 1.3.0 or newer
-- OpenCode 1.18.x for integration testing
+The platforms and versions listed under [Install](README.md#install), plus an
+OpenCode installation for integration testing.
 
 ## Development
 

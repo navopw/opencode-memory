@@ -2,8 +2,10 @@
 
 ## Supported Versions
 
-Security fixes are applied to the latest version on the `main` branch. This
-project currently targets OpenCode `1.18.x` on macOS and Linux.
+Security fixes are applied to the latest version on the `main` branch, released
+to npm as [`@navopw/opencode-memory`](https://www.npmjs.com/package/@navopw/opencode-memory).
+Supported platforms and the required OpenCode version are documented in the
+[README](README.md#install), so they are recorded in one place.
 
 ## Reporting a Vulnerability
 
@@ -28,13 +30,18 @@ the versions that `@huggingface/transformers` and `onnxruntime-node` request, so
 - `sharp <0.35.0` ([GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj)),
   required as `^0.34.5` by `@huggingface/transformers`.
 
-Neither range can currently be satisfied by upgrading: the latest
-`@huggingface/transformers` still pins the affected ranges. Neither package is
-reachable from this plugin's code paths. `adm-zip` is used only by the
-`onnxruntime-node` install script that downloads optional CUDA binaries, which
-OpenCode does not run, and `sharp` is used only for image inputs, which a
-text-only embedding plugin never passes. This is tracked so the pins can be
-dropped once upstream moves.
+Neither range can currently be satisfied by upgrading. Checked 2026-07-29:
+`@huggingface/transformers` 4.2.0, the latest release, still requires
+`sharp ^0.34.5`, and every `onnxruntime-node` release through 1.27.0 still
+requires `adm-zip ^0.5.16`.
+
+Neither package is reachable from this plugin's code paths. `adm-zip` is used
+only by the `onnxruntime-node` install script that downloads optional CUDA
+binaries, which OpenCode does not run, and `sharp` is used only for image
+inputs, which a text-only embedding plugin never passes.
+
+Re-check both when `@huggingface/transformers` publishes past 4.2.0, and drop
+the `overrides` pins once upstream ranges allow the patched versions.
 
 ## Data and Trust Model
 

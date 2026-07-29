@@ -30,7 +30,8 @@ global and project-scoped memories separate.
 ## Install
 
 Supports macOS and Linux. Requires [Bun](https://bun.sh/) `1.3.0` or newer and
-OpenCode `1.18.x`.
+OpenCode `1.18.9` or newer. The plugin uses an experimental system prompt hook,
+so a later OpenCode release can change or remove it.
 
 Add the package to the `plugin` array in your OpenCode config, either
 `~/.config/opencode/opencode.json` for every project or `opencode.json` in a

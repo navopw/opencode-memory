@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.2 - 2026-07-29
+
+### Changed
+
+- Documented the required OpenCode version once, under Install, and pointed the
+  contributing and security documents at it. The prose said `1.18.x` while the
+  package depends on `^1.18.9`, which disagreed about whether a later minor is
+  supported.
+- Recorded the date and the exact upstream versions checked for the known
+  transitive `adm-zip` and `sharp` advisories, so the claim that no fixed
+  release exists can be re-verified.
+
 ## 0.4.1 - 2026-07-29
 
 ### Changed
