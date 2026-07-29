@@ -11,11 +11,6 @@ and deleting durable memories. It combines local multilingual embeddings with
 keyword matching, injects relevant memories into later conversations, and keeps
 global and project-scoped memories separate.
 
-## Status
-
-This repository is under active development. It targets OpenCode `1.18.x` and
-uses an experimental system prompt hook.
-
 ## Features
 
 - Local multilingual embeddings through Transformers.js and ONNX, no data leaves
