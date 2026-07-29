@@ -11,6 +11,8 @@ and deleting durable memories. It combines local multilingual embeddings with
 keyword matching, injects relevant memories into later conversations, and keeps
 global and project-scoped memories separate.
 
+<img width="901" height="800" alt="CleanShot 2026-07-29 at 11 18 26" src="https://github.com/user-attachments/assets/38ebe684-beff-4487-b7c8-4018afc310e7" />
+
 ## Features
 
 - Local multilingual embeddings through Transformers.js and ONNX, no data leaves
