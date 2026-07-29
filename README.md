@@ -95,6 +95,20 @@ Removing the plugin does not delete memory data. Delete
 `~/.config/opencode/memory/` separately only if you intend to erase every saved
 memory.
 
+## Platform support
+
+| Platform | Status |
+| --- | --- |
+| macOS (Apple Silicon) | Fully supported, tested in CI |
+| macOS (Intel) | Installs, but falls back to keyword-only search |
+| Linux (x64, arm64) | Supported; CI tests x64 |
+| Windows | Not supported |
+
+Windows is deliberately excluded via the `os` field in `package.json`. On Intel
+Macs the pinned ONNX runtime no longer ships a darwin x64 binary, so embeddings
+never load and only keyword search remains. All inference runs on CPU; no GPU
+is required.
+
 ## Documentation
 
 - [Configuration](docs/configuration.md) - all options and choosing a model
