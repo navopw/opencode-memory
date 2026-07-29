@@ -147,6 +147,13 @@ makes a standalone Bun executable behave as the bun CLI. A plain `bun` on
 If the worker cannot start, the failure is logged and retrieval falls back to
 keyword matching, the same degradation as a failed model download.
 
+Recovery distinguishes the two ways a worker can disappear. One that exits after
+answering requests, which is what the idle timeout looks like, is replaced on the
+next call; a tool call that raced the exit retries once rather than reporting a
+failure. One that exits without ever answering is treated as broken and held off
+by `embedderRetryMs`, so a worker that crashes on startup cannot be respawned —
+and reload a model — on every message.
+
 ## Source Layout
 
 ```text

@@ -19,8 +19,12 @@ export type Embedder = { embed: EmbedFn; kill: () => void }
 
 export type EmbedderEvents = {
 	onWarn: (message: string) => void
-	/** Fired once when the worker is gone, so the caller can drop and respawn it. */
-	onExit: () => void
+	/**
+	 * Fired once when the worker is gone, so the caller can drop and respawn it.
+	 * `served` is false if it never answered a request, which distinguishes a
+	 * worker that crashed from one that simply timed out while idle.
+	 */
+	onExit: (served: boolean) => void
 }
 
 /**
@@ -84,6 +88,7 @@ export function startEmbedder(config: Config, events: EmbedderEvents): Promise<E
 	let nextId = 1
 	let alive = true
 	let stderr = ""
+	let served = false
 
 	const kill = () => {
 		if (!alive) return
@@ -106,6 +111,13 @@ export function startEmbedder(config: Config, events: EmbedderEvents): Promise<E
 	unref(child.stdin)
 	unref(child.stdout)
 	unref(child.stderr)
+
+	// A pipe to a process that has already left raises EPIPE asynchronously, on
+	// the stream rather than at the write call. Without a listener that is an
+	// unhandled 'error' event, which would take OpenCode down with it.
+	child.stdin?.on("error", () => kill())
+	child.stdout?.on("error", () => kill())
+	child.stderr?.on("error", () => {})
 
 	child.stderr?.setEncoding("utf8")
 	child.stderr?.on("data", (chunk: string) => {
@@ -146,6 +158,7 @@ export function startEmbedder(config: Config, events: EmbedderEvents): Promise<E
 			const waiter = pending.get(message.id)
 			if (!waiter) return
 			pending.delete(message.id)
+			served = true
 			if (Array.isArray(message.vector)) waiter.resolve(message.vector as number[])
 			else waiter.reject(new Error(String(message.error ?? "the embedder returned no vector")))
 		}
@@ -168,19 +181,21 @@ export function startEmbedder(config: Config, events: EmbedderEvents): Promise<E
 			}
 		})
 
-		child.on("error", (e) => {
-			if (!settled) events.onWarn(`the embedder process failed: ${e}`)
+		// 'error' and 'exit' can both fire for one failure; the caller is told once.
+		let notified = false
+		const gone = (message: string) => {
+			if (!settled) events.onWarn(message)
 			kill()
 			settle(null)
-			events.onExit()
-		})
+			if (notified) return
+			notified = true
+			events.onExit(served)
+		}
 
+		child.on("error", (e) => gone(`the embedder process failed: ${e}`))
 		child.on("exit", () => {
 			const tail = stderr.trim()
-			if (!settled) events.onWarn(`the embedder exited before it was ready${tail ? `: ${tail}` : ""}`)
-			kill()
-			settle(null)
-			events.onExit()
+			gone(`the embedder exited before it was ready${tail ? `: ${tail}` : ""}`)
 		})
 	})
 }

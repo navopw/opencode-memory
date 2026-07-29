@@ -36,6 +36,7 @@ afterEach(() => {
 	delete process.env.FAKE_EMBEDDER_BUN
 	delete process.env.FAKE_EMBEDDER_WORKER
 	delete process.env.FAKE_EMBEDDER_MODE
+	delete process.env.FAKE_EMBEDDER_SPAWN_LOG
 })
 
 describe("out-of-process embedder", () => {
@@ -98,6 +99,40 @@ describe("out-of-process embedder", () => {
 		const config = configFor("exit-early")
 		await embed(config, "hello", false)
 		expect(isEmbedderReady(config)).toBe(false)
+	})
+
+	test("survives an interpreter that cannot be started", async () => {
+		// A spawn error settles the start promise and reports the exit in the same
+		// synchronous turn, so the exit callback runs before the awaited embedder
+		// binding exists. Reading it there used to throw an uncaught ReferenceError.
+		const config = configFor("ready")
+		process.env.OPENCODE_MEMORY_RUNTIME = path.join(fixtures, "does-not-exist")
+		expect(await embed(config, "hello", false)).toBeNull()
+		expect(isEmbedderReady(config)).toBe(false)
+		expect(warnings.join()).toContain("ENOENT")
+	})
+
+	test("does not respawn a worker that keeps dying without answering", async () => {
+		// Each spawn loads a model, so a crash loop here would be expensive.
+		const spawns = path.join(fixtures, "spawns.log")
+		fs.writeFileSync(spawns, "")
+		process.env.FAKE_EMBEDDER_SPAWN_LOG = spawns
+		const config = configFor("crash")
+		for (let i = 0; i < 5; i++) await embed(config, `call ${i}`, false)
+		expect(fs.readFileSync(spawns, "utf8").trim().split("\n").filter(Boolean).length).toBe(1)
+		fs.rmSync(spawns, { force: true })
+	})
+
+	test("respawns a worker that exited after doing its job", async () => {
+		// The idle timeout is a normal exit, so the next call must not be delayed.
+		const spawns = path.join(fixtures, "spawns.log")
+		fs.writeFileSync(spawns, "")
+		process.env.FAKE_EMBEDDER_SPAWN_LOG = spawns
+		const config = configFor("serve-once")
+		expect(await embed(config, "first", false)).not.toBeNull()
+		expect(await embed(config, "second", false)).not.toBeNull()
+		expect(fs.readFileSync(spawns, "utf8").trim().split("\n").filter(Boolean).length).toBe(2)
+		fs.rmSync(spawns, { force: true })
 	})
 
 	test("embedIfReady never waits for a cold worker", async () => {

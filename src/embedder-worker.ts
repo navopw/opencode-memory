@@ -13,7 +13,7 @@
  *   out  {"id":1,"vector":[...]}  |  {"id":1,"error":"..."}
  *   boot {"ready":true}           |  {"ready":false,"error":"..."}
  */
-export {}
+import * as fs from "node:fs"
 
 // stdout is the protocol channel, and transformers.js writes progress and
 // warnings to it. Move that chatter to stderr before the library is loaded.
@@ -39,6 +39,24 @@ const send = (message: unknown) => {
 }
 
 /**
+ * Writes straight to the descriptor. The fatal paths below kill this process on
+ * the next line, which can discard a buffered stdout write and leave the host
+ * reporting a generic "exited before it was ready" instead of the real cause.
+ */
+const sendFatal = (message: unknown) => {
+	const buffer = Buffer.from(`${JSON.stringify(message)}\n`)
+	let offset = 0
+	// Bounded: a host that is not draining the pipe must not wedge this process.
+	for (let attempt = 0; attempt < 1000 && offset < buffer.length; attempt++) {
+		try {
+			offset += fs.writeSync(1, buffer, offset, buffer.length - offset)
+		} catch (e) {
+			if ((e as NodeJS.ErrnoException).code !== "EAGAIN") return
+		}
+	}
+}
+
+/**
  * Leaves without running JS or native teardown. Exiting cleanly would unwind
  * the ONNX runtime through NAPI, which is exactly the crash this process exists
  * to keep away from the host.
@@ -51,7 +69,7 @@ const hardExit = (): never => {
 const parseConfig = (): WorkerConfig => {
 	const raw = process.argv[2]
 	if (!raw) {
-		send({ ready: false, error: "worker started without a config argument" })
+		sendFatal({ ready: false, error: "worker started without a config argument" })
 		hardExit()
 	}
 	return JSON.parse(raw) as WorkerConfig
@@ -84,7 +102,7 @@ try {
 	extractor = (await pipeline("feature-extraction", config.model)) as unknown as Extractor
 	send({ ready: true })
 } catch (e) {
-	send({ ready: false, error: String(e) })
+	sendFatal({ ready: false, error: String(e) })
 	hardExit()
 }
 

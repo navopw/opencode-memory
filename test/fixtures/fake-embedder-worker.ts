@@ -3,15 +3,21 @@
  * tested for real: a spawned process, a handshake, and stdio framing.
  *
  * FAKE_EMBEDDER_MODE picks the behaviour under test:
- *   ready      answer every request (default)
- *   fail-load  report that the model could not be loaded, then leave
- *   exit-early leave after the handshake, without answering
+ *   ready       answer every request (default)
+ *   fail-load   report that the model could not be loaded, then leave
+ *   exit-early  leave after the handshake, without answering
+ *   crash       leave on the first request, without answering it
+ *   serve-once  answer one request, then leave
+ *
+ * FAKE_EMBEDDER_SPAWN_LOG, when set, gets a line per start, so a test can count
+ * how often the host decided to spawn.
  */
-export {}
+import * as fs from "node:fs"
 
 type Options = { queryPrefix: string; documentPrefix: string }
 
 const mode = process.env.FAKE_EMBEDDER_MODE ?? "ready"
+if (process.env.FAKE_EMBEDDER_SPAWN_LOG) fs.appendFileSync(process.env.FAKE_EMBEDDER_SPAWN_LOG, "spawn\n")
 const options = JSON.parse(process.argv[2] ?? "{}") as Options
 const send = (message: unknown) => process.stdout.write(`${JSON.stringify(message)}\n`)
 
@@ -44,8 +50,10 @@ process.stdin.on("data", (chunk: string) => {
 		buffered = buffered.slice(newline + 1)
 		if (!line) continue
 		const request = JSON.parse(line) as { id: number; text: string; isQuery: boolean }
+		if (mode === "crash") process.exit(1)
 		if (request.text === "__fail__") send({ id: request.id, error: "fake embed failure" })
 		else send({ id: request.id, vector: vectorFor(request.text, request.isQuery) })
+		if (mode === "serve-once") process.exit(0)
 	}
 })
 process.stdin.on("end", () => process.exit(0))
