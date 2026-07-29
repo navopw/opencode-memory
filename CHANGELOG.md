@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.4 - 2026-07-29
+
 ### Fixed
 
 - Quitting OpenCode with Ctrl+C no longer crashes it with
