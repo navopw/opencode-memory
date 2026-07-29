@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.1 - 2026-07-29
+
+### Changed
+
+- Documented installation through npm only, dropping the source checkout and
+  symlink methods, and removed the status section from the README. The 0.4.0
+  package was published before these edits, so its npm page still described
+  installing from source.
+
 ## 0.4.0 - 2026-07-29
 
 ### Added
