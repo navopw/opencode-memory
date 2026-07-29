@@ -1,7 +1,7 @@
 import type { Plugin, PluginModule } from "@opencode-ai/plugin"
 import { resolveConfig } from "./config.ts"
 import type { Logger, PluginContext } from "./context.ts"
-import { warmEmbedder } from "./embedding.ts"
+import { setEmbedderLogger, warmEmbedder } from "./embedding.ts"
 import { createHooks } from "./hooks.ts"
 import { createTools } from "./tools/index.ts"
 
@@ -19,7 +19,9 @@ export const MemoryPlugin: Plugin = async ({ client, worktree }, options) => {
 	for (const warning of warnings) log("warn", `config: ${warning}`)
 
 	// Warm the model in the background. Hooks never wait for it: until it is
-	// resident, retrieval falls back to keyword matching.
+	// resident, retrieval falls back to keyword matching. The model itself is
+	// loaded by a separate process, so nothing native enters this one.
+	setEmbedderLogger((message) => log("warn", message))
 	warmEmbedder(config)
 
 	const ctx: PluginContext = { config, log, worktree }
