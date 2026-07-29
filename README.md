@@ -75,34 +75,6 @@ Pin a version if you would rather approve updates yourself:
 }
 ```
 
-### From source
-
-Use this only for development, and use only one installation method. A source
-checkout loaded alongside the npm package registers the plugin twice.
-
-```sh
-git clone https://github.com/navopw/opencode-memory.git
-cd opencode-memory
-bun install --frozen-lockfile
-```
-
-Then point the config at the checkout:
-
-```jsonc
-{
-	"$schema": "https://opencode.ai/config.json",
-	"plugin": [["/absolute/path/to/opencode-memory/src/index.ts", { "topK": 8 }]]
-}
-```
-
-Alternatively symlink it into the plugin directory, which OpenCode loads
-automatically but which cannot pass options:
-
-```sh
-mkdir -p ~/.config/opencode/plugins
-ln -s "$PWD/src/index.ts" ~/.config/opencode/plugins/memory.ts
-```
-
 ### Update
 
 Quit every running OpenCode process before updating so no older plugin instance
@@ -115,24 +87,11 @@ startup. Clear the cache to force a re-resolve:
 rm -rf ~/.cache/opencode/node_modules
 ```
 
-For a source checkout:
-
-```sh
-cd /path/to/opencode-memory
-git pull --ff-only
-bun install --frozen-lockfile
-```
-
 Restart OpenCode after updating.
 
 ### Remove
 
-Remove the plugin entry from your OpenCode config, or for a symlinked source
-checkout:
-
-```sh
-rm ~/.config/opencode/plugins/memory.ts
-```
+Remove the plugin entry from your OpenCode config.
 
 Removing the plugin does not delete memory data. Delete
 `~/.config/opencode/memory/` separately only if you intend to erase every saved
