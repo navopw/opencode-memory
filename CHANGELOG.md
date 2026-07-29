@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.3 - 2026-07-29
+
+### Added
+
+- Documented platform support in the README: Windows is excluded through the
+  package `os` field, Intel Macs fall back to keyword-only search because the
+  pinned ONNX runtime no longer ships a darwin x64 binary, and all inference
+  runs on CPU.
+
 ## 0.4.2 - 2026-07-29
 
 ### Changed
