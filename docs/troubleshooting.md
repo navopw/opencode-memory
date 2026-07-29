@@ -1,7 +1,14 @@
 # Troubleshooting
 
-- **Memory tools are missing:** confirm that the symlink target exists, use only
-  one installation method, then quit and restart OpenCode.
+- **Memory tools are missing:** confirm the `plugin` entry names
+  `@navopw/opencode-memory` (or that the source path or symlink target exists),
+  use only one installation method, then quit and restart OpenCode.
+- **A plugin install fails on startup:** OpenCode installs npm plugins with Bun
+  into `~/.cache/opencode/node_modules/`. Delete that directory and restart to
+  force a clean re-resolve. The package is macOS and Linux only.
+- **Two sets of memory tools appear:** the plugin is registered twice, usually
+  by an npm entry plus a leftover symlink in `~/.config/opencode/plugins/`.
+  Remove one.
 - **A tool reports keyword-only search:** the model is still downloading or a
   previous model load failed. Check the OpenCode log and retry after the
   configured `embedderRetryMs` interval.
