@@ -45,6 +45,12 @@ export type Config = {
 	modelLoadTimeoutMs: number
 	/** After a failed embedder load, wait this long before retrying. */
 	embedderRetryMs: number
+	/**
+	 * The embedder runs in its own process (see embedder-worker.ts). It exits
+	 * after this long without a request so an idle editor does not hold on to a
+	 * resident model; the next call starts a new one.
+	 */
+	embedderIdleMs: number
 	/** Do not re-inject a memory into a session within this many turns. */
 	reinjectAfterTurns: number
 	/** Max memories to backfill embeddings for in a single pass. */
@@ -135,6 +141,7 @@ export const DEFAULTS: Config = {
 	toolTimeoutMs: 15000,
 	modelLoadTimeoutMs: 180_000,
 	embedderRetryMs: 5 * 60 * 1000,
+	embedderIdleMs: 30 * 60 * 1000,
 	reinjectAfterTurns: 8,
 	backfillBatch: 10,
 	maxStoreBytes: 10 * 1024 * 1024,
@@ -157,6 +164,7 @@ const BOUNDS: Record<string, [number, number]> = {
 	toolTimeoutMs: [100, 600_000],
 	modelLoadTimeoutMs: [1000, 1_800_000],
 	embedderRetryMs: [0, 86_400_000],
+	embedderIdleMs: [10_000, 86_400_000],
 	reinjectAfterTurns: [0, 1000],
 	backfillBatch: [0, 500],
 	maxStoreBytes: [1024, 1024 * 1024 * 1024],

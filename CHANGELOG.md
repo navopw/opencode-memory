@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- Quitting OpenCode with Ctrl+C no longer crashes it with
+  `panic: NAPI FATAL ERROR: Error::New napi_create_error`. The embedding model
+  was loaded in-process, which pulled the `onnxruntime-node` NAPI addon into
+  OpenCode; Bun then panicked while tearing the addon down on exit. The model
+  now runs in a separate process, so no native addon is loaded into OpenCode.
+
+### Changed
+
+- The embedder runs as its own detached process and speaks newline-delimited
+  JSON over stdio. It exits when OpenCode does, and after `embedderIdleMs`
+  without a request. This also moves roughly 2 GB of resident memory out of
+  OpenCode.
+
+### Added
+
+- `embedderIdleMs` (default 30 minutes) controls how long the embedder process
+  stays resident while idle.
+- `OPENCODE_MEMORY_RUNTIME` overrides the interpreter used to start the embedder
+  process, for environments where the automatic choice does not work.
+
 ## 0.4.3 - 2026-07-29
 
 ### Added

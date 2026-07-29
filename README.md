@@ -22,6 +22,8 @@ global and project-scoped memories separate.
 - Keyword retrieval whenever a vector is unavailable, so memories are never
   silently unreachable
 - Retrieval never blocks a turn on the model load
+- The model runs in its own process, keeping its memory and its native ONNX
+  runtime out of OpenCode
 - Configurable from `opencode.jsonc` without touching the source
 - Atomic, fsynced writes with restrictive permissions and cross-process locking
 - Damaged records are skipped and reported rather than disabling the plugin
