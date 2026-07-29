@@ -8,6 +8,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { strict as assert } from "node:assert"
 import { DEFAULTS, embeddingSignature } from "../src/config.ts"
+import { resetEmbedders } from "../src/embedding.ts"
 import { createHooks } from "../src/hooks.ts"
 import { createTools } from "../src/tools/index.ts"
 import { loadStore, projectPath } from "../src/store.ts"
@@ -70,5 +71,8 @@ try {
 	)
 	assert.equal(await inject("what is the best pizza topping", "negative"), undefined)
 } finally {
+	// The embedder is a separate process; stop it rather than waiting for the
+	// closed pipe to be noticed.
+	resetEmbedders()
 	fs.rmSync(dir, { recursive: true, force: true })
 }

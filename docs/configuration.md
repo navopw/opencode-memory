@@ -27,9 +27,14 @@ never fatal.
 | `lockStaleMs` | `30000` | Age at which a lock file is treated as abandoned. |
 | `lockRetries` / `lockRetryMs` | `5` / `40` | Retry policy when another process holds the lock. |
 | `embedderRetryMs` | `300000` | Wait before retrying a failed model load. |
+| `embedderIdleMs` | `1800000` | Idle time after which the embedder process exits and releases the model. |
 
 `OPENCODE_MEMORY_DIR`, `OPENCODE_MEMORY_MODEL`, and
 `OPENCODE_MEMORY_QUERY_PREFIX` still work and are overridden by plugin options.
+
+`OPENCODE_MEMORY_RUNTIME` overrides the interpreter used to start the embedder
+process. It is only needed if the automatic choice fails; see
+[Architecture](architecture.md#the-embedder-process).
 
 ## Choosing a model
 

@@ -116,6 +116,37 @@ write, and `memory_recall` and `memory_list` report how many were dropped.
 Problems affecting the whole file, such as invalid JSON or an unknown schema
 version, still raise an error and are never overwritten.
 
+## The embedder process
+
+The model never loads inside OpenCode. `embedder-worker.ts` runs as its own
+process and answers embedding requests over newline-delimited JSON on stdio.
+
+This is not about isolation for its own sake. The model runs through
+`onnxruntime-node`, a NAPI addon, and loading a NAPI addon into OpenCode makes
+Ctrl+C crash the editor: Bun tears down the JS VM while the addon still holds
+native state, the addon then creates a JS error through a dead `napi_env`, and
+Bun panics with `NAPI FATAL ERROR: Error::New napi_create_error`. The panic is a
+Bun teardown bug ([oven-sh/bun#24054](https://github.com/oven-sh/bun/issues/24054)),
+but OpenCode ships its own bundled Bun, so a plugin cannot wait for a fix. Not
+loading the addon is the part a plugin controls. Keeping it out also moves
+roughly 2 GB of resident memory out of the editor.
+
+The worker is spawned detached, in its own process group, so the terminal's
+Ctrl+C never reaches it. It leaves when its stdin closes, which happens as soon
+as OpenCode exits for any reason, and also after `embedderIdleMs` without a
+request so an idle editor does not hold a model resident. Both exits go through
+`SIGKILL` deliberately: a graceful exit would unwind ONNX through NAPI, which is
+the crash being avoided.
+
+Choosing an interpreter takes one wrinkle. OpenCode is a Bun standalone
+executable, so `process.execPath` re-runs OpenCode rather than a script; the
+worker is therefore launched through that same binary with `BUN_BE_BUN=1`, which
+makes a standalone Bun executable behave as the bun CLI. A plain `bun` on
+`execPath` is used directly. `OPENCODE_MEMORY_RUNTIME` overrides both.
+
+If the worker cannot start, the failure is logged and retrieval falls back to
+keyword matching, the same degradation as a failed model download.
+
 ## Source Layout
 
 ```text
@@ -126,6 +157,8 @@ src/
   types.ts        Memory and store types
   store.ts        paths, validation, locking, atomic writes
   embedding.ts    model lifecycle and the two embed paths
+  embedder-client.ts  spawns the embedder process and speaks its protocol
+  embedder-worker.ts  the embedder process itself, never imported by the plugin
   scoring.ts      tokenizing, cosine, scoring, relevance, diversification
   memories.ts     cross-store queries and embedding backfill
   prompt.ts       the cached system prompt block
